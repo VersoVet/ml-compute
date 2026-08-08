@@ -167,6 +167,13 @@ async def health() -> HealthResponse:
     Raises:
         HTTPException: If cluster is unhealthy.
     """
+    # Signal active processing during health check
+    if onyx_client:
+        try:
+            await onyx_client.set_working()
+        except Exception as e:
+            logger.debug(f"Failed to signal WORKING during health check: {e}")
+
     cluster_health = await ray_client.health_check()
 
     if cluster_health["status"] != "healthy":
@@ -192,6 +199,13 @@ async def ready() -> ReadyResponse:
     Returns:
         ReadyResponse indicating if service is ready.
     """
+    # Signal active processing during readiness check
+    if onyx_client:
+        try:
+            await onyx_client.set_working()
+        except Exception as e:
+            logger.debug(f"Failed to signal WORKING during readiness check: {e}")
+
     cluster_health = await ray_client.health_check()
     dependencies = {
         "ray_cluster": "ready"
