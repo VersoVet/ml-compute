@@ -12,7 +12,7 @@ services:
       ray start
       --head
       --num-cpus=0
-      --port=6379
+      --port=6380
       --dashboard-host=0.0.0.0
       --dashboard-port=8265
       --ray-debugger-external

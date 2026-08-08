@@ -39,7 +39,7 @@ logger = logging.getLogger("ml-compute")
 class RayClient:
     """Wrapper for Ray cluster connection."""
 
-    def __init__(self, ray_address: str = "ray://10.0.0.44:6379"):
+    def __init__(self, ray_address: str = "ray://10.0.0.44:6380"):
         """Initialize Ray client.
 
         Args:
