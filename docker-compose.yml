@@ -30,7 +30,7 @@ services:
     restart: unless-stopped
     network_mode: host
     environment:
-      RAY_ADDRESS: ray://127.0.0.1:6380
+      RAY_ADDRESS: ray://10.0.0.44:6380
       UVICORN_HOST: 0.0.0.0
       UVICORN_PORT: 9469
       LOG_LEVEL: info

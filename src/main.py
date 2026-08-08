@@ -9,6 +9,7 @@ Provides HTTP API for:
 
 import asyncio
 import logging
+import os
 from contextlib import asynccontextmanager
 
 import httpx
@@ -39,13 +40,14 @@ logger = logging.getLogger("ml-compute")
 class RayClient:
     """Wrapper for Ray cluster connection."""
 
-    def __init__(self, ray_address: str = "ray://10.0.0.44:6380"):
+    def __init__(self, ray_address: str = None):
         """Initialize Ray client.
 
         Args:
-            ray_address: Ray head node address.
+            ray_address: Ray head node address. Defaults to localhost:6380.
         """
-        self.ray_address = ray_address
+        # Use environment variable RAY_ADDRESS if available, else default to localhost
+        self.ray_address = ray_address or os.environ.get("RAY_ADDRESS", "ray://127.0.0.1:6380")
         self._client = None
 
     async def connect(self) -> None:
