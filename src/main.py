@@ -114,12 +114,11 @@ async def lifespan(app: FastAPI):
     await ray_client.connect()
 
     try:
-        _skill_status = OnyxClient(skill_name="ml-compute")
+        onyx = OnyxClient(skill_name="ml-compute")
         # Publish UP status (skill is now online)
-        await _skill_status.start()
+        await onyx.start()
         # Signal that orchestration is ready and processing
-        await _skill_status.publish_status("WORKING")
-        onyx = _skill_status
+        await onyx.publish_status("WORKING")
         # Pass client to modules for status publishing
         from src.modules.jobs import routes as jobs_routes
         jobs_routes.set_onyx(onyx)
