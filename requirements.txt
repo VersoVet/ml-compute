@@ -11,23 +11,11 @@ pydantic-settings==2.1.0
 # HTTP client (async)
 httpx==0.25.0
 
-# ML dependencies (workers install separately)
-# Included here for type checking and local testing
-torch==2.1.1
-torchvision==0.16.1
-ultralytics==8.0.220
-
 # Monitoring & logging
 python-json-logger==2.0.7
 
 # SDK Onyx
 onyx-sdk==2.1.0
 
-# Testing
-pytest==7.4.3
-pytest-asyncio==0.21.1
-pytest-cov==4.1.0
-
-# Linting & type checking
-mypy==1.7.1
-ruff==0.1.8
+# Note: ML dependencies (torch, torchvision, ultralytics) are installed
+# separately on worker nodes, not on the Ray head node orchestrator
