@@ -14,6 +14,12 @@ COPY requirements.txt .
 # Install Python dependencies
 RUN pip install --no-cache-dir -r requirements.txt
 
+# Copy onyx-sdk wheel if present in build context (added by Forge)
+COPY onyx_sdk.whl* . 2>/dev/null || true
+RUN if [ -f /app/onyx_sdk.whl ]; then \
+      pip install --no-cache-dir /app/onyx_sdk.whl; \
+    fi
+
 # Copy source code
 COPY src/ src/
 
