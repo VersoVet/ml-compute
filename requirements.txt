@@ -14,8 +14,6 @@ httpx==0.25.0
 # Monitoring & logging
 python-json-logger==2.0.7
 
-# SDK Onyx
-onyx-sdk==2.1.0
-
 # Note: ML dependencies (torch, torchvision, ultralytics) are installed
 # separately on worker nodes, not on the Ray head node orchestrator
+# Note: onyx-sdk is installed from the global venv (/opt/onyx/venv)
