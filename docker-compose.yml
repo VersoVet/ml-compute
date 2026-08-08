@@ -1,9 +1,7 @@
-version: '3.8'
-
 services:
   # Ray Head Node (Orchestration only, --num-cpus=0)
   ray-head:
-    image: rayproject/ray-ml:2.35.0-py312
+    image: rayproject/ray:2.35.0
     container_name: ray-head
     restart: unless-stopped
     network_mode: host
