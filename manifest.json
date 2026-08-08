@@ -1,20 +1,21 @@
 {
   "name": "ml-compute",
-  "version": "1.0.0",
+  "version": "0.1.0",
   "core": {
-    "display_name": "Ml Compute",
-    "description": "Skill ml-compute",
+    "type": "docker",
+    "display_name": "ML Compute",
+    "description": "Orchestrateur Ray pour training ML et inférence GPU. Ray head node sur Soma, workers sur OnyxPoint (GPU T1000), Glia (CPU), Axon (CPU+Grobid).",
     "status": "dev",
-    "brain_area": "prefrontal",
+    "brain_area": "cortex-visuel",
     "routing": {
       "host": "0.0.0.0",
-      "port": 8200,
+      "port": 9469,
       "protocol": "http"
     }
   },
   "heart": {
     "deployment": {
-      "target_host": "",
+      "target_host": "OnyxSoma",
       "platform": "linux"
     },
     "lifecycle": {
@@ -23,21 +24,21 @@
     }
   },
   "forge": {
-    "type": "python",
+    "type": "docker",
     "development": {
-      "dev_platform": "OnyxDendrite",
-      "test_platform": "OnyxDendrite",
+      "dev_platform": "dendrite",
+      "test_platform": "dendrite",
       "dev_status": "draft",
-      "progress_percent": 10
+      "progress_percent": 5
     },
     "repository": "VersoVet/ml-compute"
   },
   "dashboard": {
     "enabled": true,
     "page": "/",
-    "icon": "link",
-    "category": "skill",
-    "color": "#00d4aa"
+    "icon": "cpu",
+    "category": "infrastructure",
+    "color": "#e74c3c"
   },
   "integration": {
     "redis": {

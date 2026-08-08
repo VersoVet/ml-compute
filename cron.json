@@ -1,0 +1,32 @@
+{
+  "tasks": [
+    {
+      "id": "daily-health-check",
+      "name": "Daily Health Check",
+      "description": "Vérifie la santé du cluster Ray et des workers",
+      "schedule": "0 0 * * *",
+      "command": {
+        "type": "endpoint",
+        "endpoint": "/health",
+        "method": "GET"
+      },
+      "timeout_seconds": 120,
+      "enabled": true,
+      "notify_on_failure": true
+    },
+    {
+      "id": "nodes-health",
+      "name": "Nodes Health Check",
+      "description": "Vérifie l'état des ressources GPU/CPU des workers",
+      "schedule": "0 */6 * * *",
+      "command": {
+        "type": "endpoint",
+        "endpoint": "/api/nodes",
+        "method": "GET"
+      },
+      "timeout_seconds": 60,
+      "enabled": true,
+      "notify_on_failure": true
+    }
+  ]
+}
