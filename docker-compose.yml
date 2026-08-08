@@ -22,11 +22,11 @@ services:
     volumes:
       - /tmp/ray:/tmp/ray
     healthcheck:
-      test: ["CMD", "bash", "-c", "echo > /dev/tcp/127.0.0.1/6380"]
-      interval: 5s
-      timeout: 3s
+      test: ["CMD", "curl", "-f", "http://localhost:8265"]
+      interval: 10s
+      timeout: 5s
       retries: 60
-      start_period: 90s
+      start_period: 120s
 
   # FastAPI Wrapper (OnyxClient integration)
   api:
