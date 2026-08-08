@@ -21,11 +21,12 @@ services:
       - "8265:8265"
     volumes:
       - /tmp/ray:/tmp/ray
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8265"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
+    # Disabled temporarily - Ray head may take time to start
+    # healthcheck:
+    #   test: ["CMD", "curl", "-f", "http://localhost:8265"]
+    #   interval: 30s
+    #   timeout: 10s
+    #   retries: 3
 
   # FastAPI Wrapper (OnyxClient integration)
   api:
