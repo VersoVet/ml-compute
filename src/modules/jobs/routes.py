@@ -11,6 +11,24 @@ from src.modules.jobs import service
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
+# OnyxClient for status publishing (imported at module level for visibility)
+try:
+    from onyx_sdk import OnyxClient as _OnyxClientImpl
+except ImportError:
+    _OnyxClientImpl = None
+
+_onyx_client = None
+
+
+def set_onyx_client(client: Any) -> None:
+    """Set the global OnyxClient instance.
+
+    Args:
+        client: OnyxClient instance from main.py.
+    """
+    global _onyx_client
+    _onyx_client = client
+
 
 @router.post("", response_model=JobResponse, status_code=202)
 async def submit_job(request: JobSubmitRequest) -> JobResponse:
@@ -27,12 +45,11 @@ async def submit_job(request: JobSubmitRequest) -> JobResponse:
     """
     try:
         # Signal that job submission is in progress
-        try:
-            from src.main import onyx_client
-            if onyx_client:
-                await onyx_client.set_working()
-        except Exception as e:
-            logger.debug(f"Failed to signal WORKING status: {e}")
+        if _onyx_client:
+            try:
+                await _onyx_client.set_working()
+            except Exception as e:
+                logger.debug(f"Failed to signal WORKING status: {e}")
 
         result = await service.submit_job(
             name=request.name,

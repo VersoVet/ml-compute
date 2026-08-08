@@ -116,6 +116,9 @@ async def lifespan(app: FastAPI):
             onyx_client = OnyxClient(skill_name="ml-compute")
             # Publish UP status (skill is now online)
             await onyx_client.start()
+            # Pass client to modules for status publishing
+            from src.modules.jobs import routes as jobs_routes
+            jobs_routes.set_onyx_client(onyx_client)
             logger.info("OnyxClient connected and status UP")
         except Exception as e:
             logger.warning(f"OnyxClient initialization failed: {e}")
