@@ -1,6 +1,6 @@
 {
   "name": "ml-compute",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "core": {
     "type": "docker",
     "display_name": "ML Compute",
@@ -33,8 +33,8 @@
     "development": {
       "dev_platform": "dendrite",
       "test_platform": "dendrite",
-      "dev_status": "draft",
-      "progress_percent": 5
+      "dev_status": "deployed",
+      "progress_percent": 100
     },
     "repository": "VersoVet/ml-compute"
   },
