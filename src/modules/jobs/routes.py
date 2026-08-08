@@ -42,7 +42,7 @@ async def submit_job(request: JobSubmitRequest) -> JobResponse:
         # Signal that job submission is in progress
         if _onyx:
             try:
-                await _onyx.set_working()
+                await _onyx.publish_status("WORKING")
             except Exception as e:
                 logger.debug(f"Failed to signal WORKING status: {e}")
 

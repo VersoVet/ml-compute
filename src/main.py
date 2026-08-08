@@ -118,7 +118,7 @@ async def lifespan(app: FastAPI):
         # Publish UP status (skill is now online)
         await _skill_status.start()
         # Signal that orchestration is ready and processing
-        await _skill_status.set_working()
+        await _skill_status.publish_status("WORKING")
         onyx = _skill_status
         # Pass client to modules for status publishing
         from src.modules.jobs import routes as jobs_routes
@@ -170,7 +170,7 @@ async def health() -> HealthResponse:
     # Signal active processing during health check
     if onyx:
         try:
-            await onyx.set_working()
+            await onyx.publish_status("WORKING")
         except Exception as e:
             logger.debug(f"Failed to signal WORKING during health check: {e}")
 
@@ -202,7 +202,7 @@ async def ready() -> ReadyResponse:
     # Signal active processing during readiness check
     if onyx:
         try:
-            await onyx.set_working()
+            await onyx.publish_status("WORKING")
         except Exception as e:
             logger.debug(f"Failed to signal WORKING during readiness check: {e}")
 
