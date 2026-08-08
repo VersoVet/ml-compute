@@ -49,7 +49,8 @@ services:
     volumes:
       - ./models:/opt/onyx/skills/ml-compute/models
       - ./config:/opt/onyx/skills/ml-compute/config
-    command: python -m src.main
+      - ./onyx_sdk.whl:/app/onyx_sdk.whl:ro
+    entrypoint: /app/entrypoint.sh
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:9469/health"]
       interval: 30s
