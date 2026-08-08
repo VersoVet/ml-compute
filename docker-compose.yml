@@ -8,14 +8,7 @@ services:
     environment:
       RAY_memory: 4000000000
       RAY_object_store_memory: 1000000000
-    command: >
-      ray start
-      --head
-      --num-cpus=0
-      --port=6380
-      --dashboard-host=0.0.0.0
-      --dashboard-port=8265
-      --ray-debugger-external
+    command: bash -c "ray start --head --num-cpus=0 --port=6380 --dashboard-host=0.0.0.0 --dashboard-port=8265 --ray-debugger-external && sleep infinity"
     ports:
       - "6379:6379"
       - "8265:8265"
