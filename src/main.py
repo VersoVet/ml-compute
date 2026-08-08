@@ -15,6 +15,13 @@ import httpx
 from fastapi import FastAPI, HTTPException
 from onyx_sdk import OnyxClient
 
+# Status constants for SDK visibility
+SKILL_STATUS_UP = "UP"
+SKILL_STATUS_DOWN = "DOWN"
+SKILL_STATUS_WORKING = "WORKING"
+
+_skill_status = None
+
 from src.models import (
     HealthResponse,
     PageInfo,
@@ -107,11 +114,12 @@ async def lifespan(app: FastAPI):
     await ray_client.connect()
 
     try:
-        onyx_client = OnyxClient(skill_name="ml-compute")
+        _skill_status = OnyxClient(skill_name="ml-compute")
         # Publish UP status (skill is now online)
-        await onyx_client.start()
-        # Signal that orchestration is ready
-        await onyx_client.publish_status("WORKING")
+        await _skill_status.start()
+        # Signal that orchestration is ready and processing
+        await _skill_status.publish_status(SKILL_STATUS_WORKING)
+        onyx_client = _skill_status
         # Pass client to modules for status publishing
         from src.modules.jobs import routes as jobs_routes
         jobs_routes.set_onyx_client(onyx_client)
