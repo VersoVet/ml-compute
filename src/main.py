@@ -248,6 +248,13 @@ async def root() -> dict:
     Returns:
         API information dict.
     """
+    # Signal active processing if available
+    if onyx_client:
+        try:
+            await onyx_client.publish_status("WORKING")
+        except Exception:
+            pass
+
     return {
         "service": "ml-compute",
         "version": "0.1.0",
