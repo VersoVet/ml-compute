@@ -56,7 +56,14 @@ class RayClient:
             import ray
 
             if not ray.is_initialized():
-                ray.init(address=self.ray_address, ignore_reinit_error=True)
+                # Try to connect with a longer timeout for network initialization
+                ray.init(
+                    address=self.ray_address,
+                    ignore_reinit_error=True,
+                    _temp_dir="/tmp/ray_init",
+                    include_dashboard=False,
+                    _client_mode=True
+                )
             logger.info(f"Connected to Ray at {self.ray_address}")
         except Exception as e:
             logger.error(f"Failed to connect to Ray: {e}")
