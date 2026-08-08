@@ -30,7 +30,7 @@ services:
     restart: unless-stopped
     network_mode: host
     environment:
-      RAY_ADDRESS: ray://localhost:6380
+      RAY_DASHBOARD_URL: http://localhost:8265
       UVICORN_HOST: 0.0.0.0
       UVICORN_PORT: 9469
       LOG_LEVEL: info

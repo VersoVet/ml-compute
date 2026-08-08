@@ -38,70 +38,61 @@ logger = logging.getLogger("ml-compute")
 
 
 class RayClient:
-    """Wrapper for Ray cluster connection."""
+    """Wrapper for Ray cluster via HTTP Dashboard API."""
 
-    def __init__(self, ray_address: str = None):
+    def __init__(self, dashboard_url: str = None):
         """Initialize Ray client.
 
         Args:
-            ray_address: Ray head node address. Defaults to localhost:6380.
+            dashboard_url: Ray Dashboard URL. Defaults to http://localhost:8265.
         """
-        # Use environment variable RAY_ADDRESS if available, else default to localhost
-        self.ray_address = ray_address or os.environ.get("RAY_ADDRESS", "ray://127.0.0.1:6380")
-        self._client = None
+        self.dashboard_url = dashboard_url or os.environ.get(
+            "RAY_DASHBOARD_URL", "http://localhost:8265"
+        )
 
     async def connect(self) -> None:
-        """Connect to Ray cluster."""
+        """Verify Ray dashboard is accessible."""
         try:
-            import ray
-
-            if not ray.is_initialized():
-                # Try to connect with a longer timeout for network initialization
-                ray.init(
-                    address=self.ray_address,
-                    ignore_reinit_error=True,
-                    _temp_dir="/tmp/ray_init",
-                    include_dashboard=False,
-                    _client_mode=True
+            async with httpx.AsyncClient() as client:
+                r = await client.get(
+                    f"{self.dashboard_url}/api/v0/nodes", timeout=10.0
                 )
-            logger.info(f"Connected to Ray at {self.ray_address}")
+                r.raise_for_status()
+            logger.info(f"Connected to Ray dashboard at {self.dashboard_url}")
         except Exception as e:
-            logger.error(f"Failed to connect to Ray: {e}")
+            logger.error(f"Failed to connect to Ray dashboard: {e}")
             raise
 
     async def disconnect(self) -> None:
-        """Disconnect from Ray cluster."""
-        try:
-            import ray
-
-            if ray.is_initialized():
-                ray.shutdown()
-            logger.info("Disconnected from Ray")
-        except Exception as e:
-            logger.error(f"Failed to disconnect from Ray: {e}")
+        """Disconnect from Ray (no-op for HTTP mode)."""
+        logger.info("Disconnected from Ray (HTTP mode)")
 
     async def health_check(self) -> dict:
-        """Check Ray cluster health.
+        """Check Ray cluster health via dashboard API.
 
         Returns:
             Cluster health status dict.
         """
         try:
-            import ray
+            async with httpx.AsyncClient() as client:
+                r = await client.get(
+                    f"{self.dashboard_url}/api/v0/nodes", timeout=5.0
+                )
+                r.raise_for_status()
+                data = r.json()
 
-            if not ray.is_initialized():
-                return {
-                    "status": "unhealthy",
-                    "reason": "Ray not initialized",
-                }
+            nodes = data.get("data", {}).get("result", {}).get("result", [])
+            resources = {}
+            for node in nodes:
+                resources.update(node.get("resources_total", {}))
 
-            cluster_info = ray.cluster_resources()
             return {
-                "status": "healthy" if cluster_info else "unhealthy",
-                "resources": cluster_info,
-                "workers": len(ray.nodes()),
+                "status": "healthy" if nodes else "unhealthy",
+                "resources": resources,
+                "workers": len(nodes),
             }
         except Exception as e:
+            logger.error(f"Failed to get cluster health: {e}")
             return {"status": "unhealthy", "reason": str(e)}
 
 

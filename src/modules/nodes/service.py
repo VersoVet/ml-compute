@@ -1,53 +1,61 @@
 """Ray cluster nodes service layer."""
 
 import logging
+import os
 from typing import Any
+
+import httpx
 
 logger = logging.getLogger(__name__)
 
+RAY_DASHBOARD_URL = os.environ.get("RAY_DASHBOARD_URL", "http://localhost:8265")
+
 
 async def get_cluster_nodes() -> dict[str, Any]:
-    """Get all nodes in Ray cluster with resource info.
+    """Get all nodes in Ray cluster with resource info via HTTP Dashboard API.
 
     Returns:
         Dict with nodes list and cluster status.
 
     Raises:
-        RuntimeError: If Ray is not initialized.
+        RuntimeError: If unable to reach Ray Dashboard.
     """
     try:
-        import ray
+        async with httpx.AsyncClient() as client:
+            r = await client.get(
+                f"{RAY_DASHBOARD_URL}/api/v0/nodes", timeout=10.0
+            )
+            r.raise_for_status()
+            data = r.json()
 
-        if not ray.is_initialized():
-            raise RuntimeError("Ray cluster not initialized")
-
-        nodes = ray.nodes()
-        resources = ray.cluster_resources()
-        available_resources = ray.available_resources()
+        raw_nodes = data.get("data", {}).get("result", {}).get("result", [])
 
         nodes_info = []
-        for node in nodes:
+        total_resources = {}
+
+        for node in raw_nodes:
             node_info = {
-                "node_id": node["NodeID"],
-                "node_name": node.get("NodeName", "unknown"),
-                "node_ip": node.get("NodeManagerAddress", "unknown"),
-                "is_head": node["IsHead"],
-                "status": "alive",
-                "resources": node.get("Resources", {}),
-                "available_resources": node.get("AvailableResources", {}),
+                "node_id": node.get("node_id", ""),
+                "node_name": node.get("node_name", "unknown"),
+                "node_ip": node.get("node_ip", "unknown"),
+                "is_head": node.get("is_head_node", False),
+                "status": node.get("state", "unknown").lower(),
+                "resources": node.get("resources_total", {}),
+                "available_resources": node.get("resources_total", {}),
             }
             nodes_info.append(node_info)
 
+            # Aggregate total resources
+            for key, value in node.get("resources_total", {}).items():
+                total_resources[key] = total_resources.get(key, 0) + value
+
         return {
             "nodes": nodes_info,
-            "cluster_status": "healthy" if len(nodes) > 0 else "unhealthy",
-            "total_resources": resources,
+            "cluster_status": "healthy" if raw_nodes else "unhealthy",
+            "total_resources": total_resources,
         }
-    except RuntimeError as e:
-        logger.error(f"Failed to get cluster nodes: {e}")
-        raise
     except Exception as e:
-        logger.error(f"Unexpected error getting cluster nodes: {e}")
+        logger.error(f"Failed to get cluster nodes: {e}")
         raise RuntimeError(f"Failed to query cluster: {e}")
 
 
