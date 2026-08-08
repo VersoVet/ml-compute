@@ -115,10 +115,10 @@ async def lifespan(app: FastAPI):
 
     try:
         onyx = OnyxClient(skill_name="ml-compute")
-        # Publish UP status (skill is now online)
-        await onyx.start()
+        # Initialize OnyxClient (synchronous)
+        onyx.start()
         # Signal that orchestration is ready and processing
-        await onyx.publish_status("WORKING")
+        onyx.publish_status("WORKING")
         # Pass client to modules for status publishing
         from src.modules.jobs import routes as jobs_routes
         jobs_routes.set_onyx(onyx)
@@ -133,7 +133,7 @@ async def lifespan(app: FastAPI):
     if onyx:
         try:
             # Publish DOWN status (skill is offline)
-            await onyx.stop()
+            onyx.stop()
             logger.info("OnyxClient status DOWN published")
         except Exception as e:
             logger.warning(f"Failed to publish shutdown status: {e}")
@@ -169,7 +169,7 @@ async def health() -> HealthResponse:
     # Signal active processing during health check
     if onyx:
         try:
-            await onyx.publish_status("WORKING")
+            onyx.publish_status("WORKING")
         except Exception as e:
             logger.debug(f"Failed to signal WORKING during health check: {e}")
 
