@@ -106,37 +106,34 @@ async def lifespan(app: FastAPI):
     """Manage FastAPI app lifecycle.
 
     Connects to Ray on startup, disconnects on shutdown.
-    Initializes OnyxClient for status publishing.
+    Initializes OnyxClient for status publishing (optional).
     """
     global onyx
 
     # Startup
     await ray_client.connect()
 
+    # Initialize OnyxClient (optional - non-blocking)
     try:
         onyx = OnyxClient(skill_name="ml-compute")
-        # Initialize OnyxClient (synchronous)
         onyx.start()
-        # Signal that orchestration is ready and processing
-        onyx.publish_status("WORKING")
         # Pass client to modules for status publishing
         from src.modules.jobs import routes as jobs_routes
         jobs_routes.set_onyx(onyx)
-        logger.info("OnyxClient connected and status UP/WORKING")
+        logger.info("OnyxClient initialized")
     except Exception as e:
-        logger.error(f"OnyxClient initialization failed: {e}")
-        raise
+        logger.debug(f"OnyxClient initialization (optional): {e}")
+        onyx = None
 
     yield
 
     # Shutdown
     if onyx:
         try:
-            # Publish DOWN status (skill is offline)
             onyx.stop()
-            logger.info("OnyxClient status DOWN published")
+            logger.info("OnyxClient stopped")
         except Exception as e:
-            logger.warning(f"Failed to publish shutdown status: {e}")
+            logger.debug(f"OnyxClient shutdown (optional): {e}")
 
     await ray_client.disconnect()
 
@@ -166,12 +163,6 @@ async def health() -> HealthResponse:
     Raises:
         HTTPException: If cluster is unhealthy.
     """
-    # Signal active processing during health check
-    if onyx:
-        try:
-            onyx.publish_status("WORKING")
-        except Exception as e:
-            logger.debug(f"Failed to signal WORKING during health check: {e}")
 
     cluster_health = await ray_client.health_check()
 
