@@ -1,0 +1,67 @@
+version: '3.8'
+
+services:
+  # Ray Head Node (Orchestration only, --num-cpus=0)
+  ray-head:
+    image: rayproject/ray-ml:2.35.0-py312
+    container_name: ray-head
+    restart: unless-stopped
+    network_mode: host
+    environment:
+      RAY_memory: 4000000000
+      RAY_object_store_memory: 1000000000
+    command: >
+      ray start
+      --head
+      --num-cpus=0
+      --port=6379
+      --dashboard-host=0.0.0.0
+      --dashboard-port=8265
+      --ray-debugger-external
+    ports:
+      - "6379:6379"
+      - "8265:8265"
+    volumes:
+      - ray-storage:/tmp/ray
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8265"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # FastAPI Wrapper (OnyxClient integration)
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: ml-compute-api
+    restart: unless-stopped
+    network_mode: host
+    environment:
+      RAY_ADDRESS: ray://127.0.0.1:6379
+      UVICORN_HOST: 0.0.0.0
+      UVICORN_PORT: 9469
+      LOG_LEVEL: info
+    depends_on:
+      ray-head:
+        condition: service_healthy
+    ports:
+      - "9469:9469"
+    volumes:
+      - ./models:/opt/onyx/skills/ml-compute/models
+      - ./config:/opt/onyx/skills/ml-compute/config
+    command: python -m src.main
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9469/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+volumes:
+  ray-storage:
+    driver: local
+
+networks:
+  default:
+    name: ml-compute
+    driver: bridge

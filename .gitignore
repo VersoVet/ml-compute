@@ -34,11 +34,13 @@ ENV/
 *~
 .DS_Store
 
-# Environment
+# Environment & Credentials
 .env
 .env.local
 *.key
+*.pem
 secrets*
+credentials*
 
 # Ray / ML
 .ray/

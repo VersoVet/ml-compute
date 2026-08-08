@@ -14,6 +14,12 @@ from contextlib import asynccontextmanager
 import httpx
 from fastapi import FastAPI, HTTPException
 
+try:
+    from onyx_sdk import OnyxClient
+    ONYX_SDK_AVAILABLE = True
+except ImportError:
+    ONYX_SDK_AVAILABLE = False
+
 from src.models import (
     HealthResponse,
     PageInfo,
@@ -88,8 +94,9 @@ class RayClient:
             return {"status": "unhealthy", "reason": str(e)}
 
 
-# Global Ray client
+# Global clients
 ray_client = RayClient()
+onyx_client = None
 
 
 @asynccontextmanager
@@ -97,11 +104,30 @@ async def lifespan(app: FastAPI):
     """Manage FastAPI app lifecycle.
 
     Connects to Ray on startup, disconnects on shutdown.
+    Initializes OnyxClient for status publishing if available.
     """
+    global onyx_client
+
     # Startup
     await ray_client.connect()
+
+    if ONYX_SDK_AVAILABLE:
+        try:
+            onyx_client = OnyxClient(skill_name="ml-compute")
+            await onyx_client.publish_status("starting")
+            logger.info("OnyxClient connected")
+        except Exception as e:
+            logger.warning(f"OnyxClient initialization failed: {e}")
+
     yield
+
     # Shutdown
+    if onyx_client:
+        try:
+            await onyx_client.publish_status("stopping")
+        except Exception as e:
+            logger.warning(f"Failed to publish shutdown status: {e}")
+
     await ray_client.disconnect()
 
 

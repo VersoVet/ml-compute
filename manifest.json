@@ -21,6 +21,11 @@
     "lifecycle": {
       "run_mode": "service",
       "start_command": "python -m src.main"
+    },
+    "resources": {
+      "memory_high": "2G",
+      "memory_max": "4G",
+      "cpus": "4"
     }
   },
   "forge": {
