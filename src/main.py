@@ -118,7 +118,7 @@ async def lifespan(app: FastAPI):
         # Publish UP status (skill is now online)
         await _skill_status.start()
         # Signal that orchestration is ready and processing
-        await _skill_status.publish_status(SKILL_STATUS_WORKING)
+        await _skill_status.set_working()
         onyx_client = _skill_status
         # Pass client to modules for status publishing
         from src.modules.jobs import routes as jobs_routes
