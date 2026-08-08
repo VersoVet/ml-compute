@@ -98,7 +98,7 @@ class RayClient:
 
 # Global clients
 ray_client = RayClient()
-onyx_client = None
+onyx = None
 
 
 @asynccontextmanager
@@ -108,7 +108,7 @@ async def lifespan(app: FastAPI):
     Connects to Ray on startup, disconnects on shutdown.
     Initializes OnyxClient for status publishing.
     """
-    global onyx_client
+    global onyx
 
     # Startup
     await ray_client.connect()
@@ -119,10 +119,10 @@ async def lifespan(app: FastAPI):
         await _skill_status.start()
         # Signal that orchestration is ready and processing
         await _skill_status.set_working()
-        onyx_client = _skill_status
+        onyx = _skill_status
         # Pass client to modules for status publishing
         from src.modules.jobs import routes as jobs_routes
-        jobs_routes.set_onyx_client(onyx_client)
+        jobs_routes.set_onyx(onyx)
         logger.info("OnyxClient connected and status UP/WORKING")
     except Exception as e:
         logger.error(f"OnyxClient initialization failed: {e}")
@@ -131,10 +131,10 @@ async def lifespan(app: FastAPI):
     yield
 
     # Shutdown
-    if onyx_client:
+    if onyx:
         try:
             # Publish DOWN status (skill is offline)
-            await onyx_client.stop()
+            await onyx.stop()
             logger.info("OnyxClient status DOWN published")
         except Exception as e:
             logger.warning(f"Failed to publish shutdown status: {e}")
@@ -168,9 +168,9 @@ async def health() -> HealthResponse:
         HTTPException: If cluster is unhealthy.
     """
     # Signal active processing during health check
-    if onyx_client:
+    if onyx:
         try:
-            await onyx_client.set_working()
+            await onyx.set_working()
         except Exception as e:
             logger.debug(f"Failed to signal WORKING during health check: {e}")
 
@@ -200,9 +200,9 @@ async def ready() -> ReadyResponse:
         ReadyResponse indicating if service is ready.
     """
     # Signal active processing during readiness check
-    if onyx_client:
+    if onyx:
         try:
-            await onyx_client.set_working()
+            await onyx.set_working()
         except Exception as e:
             logger.debug(f"Failed to signal WORKING during readiness check: {e}")
 
@@ -268,9 +268,9 @@ async def root() -> dict:
         API information dict.
     """
     # Signal active processing if available
-    if onyx_client:
+    if onyx:
         try:
-            await onyx_client.publish_status("WORKING")
+            await onyx.publish_status("WORKING")
         except Exception:
             pass
 
