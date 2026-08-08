@@ -12,11 +12,6 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 # OnyxClient for status publishing (imported at module level for visibility)
-try:
-    from onyx_sdk import OnyxClient as _OnyxClientImpl
-except ImportError:
-    _OnyxClientImpl = None
-
 _onyx_client = None
 
 

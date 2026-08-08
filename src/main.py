@@ -13,12 +13,7 @@ from contextlib import asynccontextmanager
 
 import httpx
 from fastapi import FastAPI, HTTPException
-
-try:
-    from onyx_sdk import OnyxClient
-    ONYX_SDK_AVAILABLE = True
-except ImportError:
-    ONYX_SDK_AVAILABLE = False
+from onyx_sdk import OnyxClient
 
 from src.models import (
     HealthResponse,
@@ -104,24 +99,24 @@ async def lifespan(app: FastAPI):
     """Manage FastAPI app lifecycle.
 
     Connects to Ray on startup, disconnects on shutdown.
-    Initializes OnyxClient for status publishing if available.
+    Initializes OnyxClient for status publishing.
     """
     global onyx_client
 
     # Startup
     await ray_client.connect()
 
-    if ONYX_SDK_AVAILABLE:
-        try:
-            onyx_client = OnyxClient(skill_name="ml-compute")
-            # Publish UP status (skill is now online)
-            await onyx_client.start()
-            # Pass client to modules for status publishing
-            from src.modules.jobs import routes as jobs_routes
-            jobs_routes.set_onyx_client(onyx_client)
-            logger.info("OnyxClient connected and status UP")
-        except Exception as e:
-            logger.warning(f"OnyxClient initialization failed: {e}")
+    try:
+        onyx_client = OnyxClient(skill_name="ml-compute")
+        # Publish UP status (skill is now online)
+        await onyx_client.start()
+        # Pass client to modules for status publishing
+        from src.modules.jobs import routes as jobs_routes
+        jobs_routes.set_onyx_client(onyx_client)
+        logger.info("OnyxClient connected and status UP")
+    except Exception as e:
+        logger.error(f"OnyxClient initialization failed: {e}")
+        raise
 
     yield
 
