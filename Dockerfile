@@ -16,11 +16,9 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy source code
 COPY src/ src/
-COPY config/ config/ 2>/dev/null || true
-COPY models/ models/ 2>/dev/null || true
 
-# Create necessary directories
-RUN mkdir -p /opt/onyx/skills/ml-compute/{config,models}
+# Create necessary directories (will be mounted or auto-created at runtime)
+RUN mkdir -p /app/config /app/models
 
 # Expose port
 EXPOSE 9469
