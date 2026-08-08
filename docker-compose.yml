@@ -23,10 +23,10 @@ services:
       - /tmp/ray:/tmp/ray
     healthcheck:
       test: ["CMD", "bash", "-c", "echo > /dev/tcp/127.0.0.1/6380"]
-      interval: 10s
-      timeout: 5s
-      retries: 30
-      start_period: 30s
+      interval: 5s
+      timeout: 3s
+      retries: 60
+      start_period: 90s
 
   # FastAPI Wrapper (OnyxClient integration)
   api:
