@@ -1,0 +1,51 @@
+{
+  "name": "ml-compute",
+  "version": "1.0.0",
+  "core": {
+    "display_name": "Ml Compute",
+    "description": "Skill ml-compute",
+    "status": "dev",
+    "brain_area": "prefrontal",
+    "routing": {
+      "host": "0.0.0.0",
+      "port": 8200,
+      "protocol": "http"
+    }
+  },
+  "heart": {
+    "deployment": {
+      "target_host": "",
+      "platform": "linux"
+    },
+    "lifecycle": {
+      "run_mode": "service",
+      "start_command": "python -m src.main"
+    }
+  },
+  "forge": {
+    "type": "python",
+    "development": {
+      "dev_platform": "OnyxDendrite",
+      "test_platform": "OnyxDendrite",
+      "dev_status": "draft",
+      "progress_percent": 10
+    },
+    "repository": "VersoVet/ml-compute"
+  },
+  "dashboard": {
+    "enabled": true,
+    "page": "/",
+    "icon": "link",
+    "category": "skill",
+    "color": "#00d4aa"
+  },
+  "integration": {
+    "redis": {
+      "publish_status": true,
+      "channel": "onyx:skill:status"
+    },
+    "sdk": {
+      "min_version": "2.1.0"
+    }
+  }
+}
