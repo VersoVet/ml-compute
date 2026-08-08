@@ -20,7 +20,7 @@ services:
       - "6379:6379"
       - "8265:8265"
     volumes:
-      - ray-storage:/tmp/ray
+      - /tmp/ray:/tmp/ray
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8265"]
       interval: 30s
