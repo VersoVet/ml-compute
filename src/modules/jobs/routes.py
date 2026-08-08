@@ -1,5 +1,6 @@
 """FastAPI routes for Ray Jobs API."""
 
+import logging
 from typing import Any
 
 from fastapi import APIRouter, HTTPException, Query
@@ -7,6 +8,7 @@ from fastapi import APIRouter, HTTPException, Query
 from src.models import JobResponse, JobSubmitRequest
 from src.modules.jobs import service
 
+logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
@@ -24,6 +26,14 @@ async def submit_job(request: JobSubmitRequest) -> JobResponse:
         HTTPException: If submission fails.
     """
     try:
+        # Signal that job submission is in progress
+        try:
+            from src.main import onyx_client
+            if onyx_client:
+                await onyx_client.set_working()
+        except Exception as e:
+            logger.debug(f"Failed to signal WORKING status: {e}")
+
         result = await service.submit_job(
             name=request.name,
             entrypoint=request.entrypoint,

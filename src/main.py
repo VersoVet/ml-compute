@@ -114,8 +114,9 @@ async def lifespan(app: FastAPI):
     if ONYX_SDK_AVAILABLE:
         try:
             onyx_client = OnyxClient(skill_name="ml-compute")
-            await onyx_client.publish_status("starting")
-            logger.info("OnyxClient connected")
+            # Publish UP status (skill is now online)
+            await onyx_client.start()
+            logger.info("OnyxClient connected and status UP")
         except Exception as e:
             logger.warning(f"OnyxClient initialization failed: {e}")
 
@@ -124,7 +125,9 @@ async def lifespan(app: FastAPI):
     # Shutdown
     if onyx_client:
         try:
-            await onyx_client.publish_status("stopping")
+            # Publish DOWN status (skill is offline)
+            await onyx_client.stop()
+            logger.info("OnyxClient status DOWN published")
         except Exception as e:
             logger.warning(f"Failed to publish shutdown status: {e}")
 
