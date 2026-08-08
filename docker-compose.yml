@@ -15,7 +15,7 @@ services:
     volumes:
       - /tmp/ray:/tmp/ray
     healthcheck:
-      test: ["CMD", "bash", "-c", "echo 'GET / HTTP/1.0\\r\\n\\r\\n' | nc localhost 8265 | grep -q 'HTTP'"]
+      test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/8265 && echo 'OK' || exit 1"]
       interval: 10s
       timeout: 5s
       retries: 60
