@@ -7,7 +7,6 @@ Provides HTTP API for:
 - Listing available models
 """
 
-import asyncio
 import logging
 import os
 from contextlib import asynccontextmanager

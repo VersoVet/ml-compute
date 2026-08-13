@@ -3,11 +3,29 @@
 from typing import Any
 
 from fastapi import APIRouter, HTTPException
+from pydantic import BaseModel, Field
 
 from src.models import ServeDeploymentsResponse
 from src.modules.serve import service
 
 router = APIRouter()
+
+
+class DeployRequest(BaseModel):
+    """Request body for deploying a model via Ray Serve."""
+
+    name: str = Field(..., description="Application/deployment name")
+    type: str = Field("custom", description="Model type: yolo, efficientnet, vllm, custom")
+    model: str | None = Field(None, description="Path to model weights")
+    num_replicas: int = Field(1, ge=1, le=8, description="Number of replicas")
+    num_gpus: int = Field(0, ge=0, description="GPUs per replica")
+    gpu_memory_utilization: float = Field(0.7, ge=0.1, le=1.0, description="vLLM GPU memory fraction")
+
+
+class UndeployRequest(BaseModel):
+    """Request body for removing a Ray Serve application."""
+
+    name: str = Field(..., description="Application name to remove")
 
 
 @router.get("/deployments", response_model=ServeDeploymentsResponse)
@@ -25,51 +43,54 @@ async def list_deployments() -> ServeDeploymentsResponse:
     )
 
 
+@router.get("/status", tags=["serve"])
+async def get_serve_status() -> dict[str, Any]:
+    """Get Ray Serve global status.
+
+    Returns:
+        Serve status with application count and proxy info.
+    """
+    return await service.get_serve_status()
+
+
 @router.post("/deploy", status_code=202, tags=["serve"])
-async def deploy_model(request: dict[str, Any]) -> dict[str, Any]:
+async def deploy_model(request: DeployRequest) -> dict[str, Any]:
     """Deploy a model for inference using Ray Serve.
 
     Args:
-        request: Deployment request with model config.
+        request: Deployment config with model type and replicas.
 
     Returns:
-        Deployment status dict.
+        Deployment status dict with endpoint URL.
 
     Raises:
         HTTPException: If deployment fails.
     """
     try:
-        name = request.get("name")
-        if not name:
-            raise HTTPException(status_code=400, detail="Model name required")
-
         result = await service.deploy_model(
-            name=name,
-            model_type=request.get("type", "unknown"),
-            model_path=request.get("model"),
-            num_replicas=request.get("num_replicas", 1),
+            name=request.name,
+            model_type=request.type,
+            model_path=request.model,
+            num_replicas=request.num_replicas,
+            num_gpus=request.num_gpus,
+            gpu_memory_utilization=request.gpu_memory_utilization,
         )
-
         return result
     except RuntimeError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
 
 @router.post("/undeploy", status_code=204, tags=["serve"])
-async def undeploy_model(request: dict[str, str]) -> None:
-    """Remove a Ray Serve deployment.
+async def undeploy_model(request: UndeployRequest) -> None:
+    """Remove a Ray Serve application.
 
     Args:
-        request: Request with model name to remove.
+        request: Request with application name to remove.
 
     Raises:
-        HTTPException: If undeploy fails.
+        HTTPException: If application not found or undeploy fails.
     """
     try:
-        name = request.get("name")
-        if not name:
-            raise HTTPException(status_code=400, detail="Model name required")
-
-        await service.undeploy_model(name)
+        await service.undeploy_model(request.name)
     except RuntimeError as e:
         raise HTTPException(status_code=404, detail=str(e))

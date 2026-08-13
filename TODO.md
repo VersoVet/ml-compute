@@ -32,9 +32,9 @@
   - [ ] routes.py: GET /api/nodes
   - [ ] Tests unitaires
 
-- [ ] Module **serve** (Ray Serve deployments)
-  - [ ] service.py: deploy, undeploy, list_deployments
-  - [ ] routes.py: POST/DELETE /api/serve
+- [x] Module **serve** (Ray Serve deployments)
+  - [x] service.py: deploy, undeploy, list_deployments, get_serve_status (HTTP Dashboard API)
+  - [x] routes.py: GET/POST /api/serve (Pydantic request models)
   - [ ] Tests unitaires
 
 - [ ] Module **models** (Model registry)

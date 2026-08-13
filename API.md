@@ -160,7 +160,7 @@ Job stopped successfully
 ## Serve API
 
 ### GET /api/serve/deployments
-Liste les modèles d'inférence déployés via Ray Serve.
+Liste les applications Ray Serve déployées via l'API Dashboard HTTP.
 
 **Response**:
 ```json
@@ -168,9 +168,9 @@ Liste les modèles d'inférence déployés via Ray Serve.
   "deployments": [
     {
       "name": "yolo-v8-bones",
+      "application": "yolo-v8-bones",
       "status": "HEALTHY",
       "replicas": 2,
-      "memory": 4000000000,
       "endpoint": "http://10.0.0.44:8000/yolo-v8-bones"
     }
   ],
@@ -178,8 +178,20 @@ Liste les modèles d'inférence déployés via Ray Serve.
 }
 ```
 
+### GET /api/serve/status
+Statut global de Ray Serve (nombre d'applications, proxy).
+
+**Response**:
+```json
+{
+  "status": "running",
+  "applications": 2,
+  "proxy_location": "EveryNode"
+}
+```
+
 ### POST /api/serve/deploy
-Déploie un modèle d'inférence via Ray Serve.
+Déploie un modèle d'inférence comme application Ray Serve.
 
 **Request**:
 ```json
@@ -189,21 +201,25 @@ Déploie un modèle d'inférence via Ray Serve.
   "model": "meta-llama/Llama-3.3-8B",
   "gpu_memory_utilization": 0.7,
   "num_replicas": 1,
-  "node": "onyxpoint"
+  "num_gpus": 1
 }
 ```
+
+Types supportés : `yolo`, `efficientnet`, `vllm`, `custom`.
 
 **Response** (202 Accepted):
 ```json
 {
   "name": "llama-3.3-8b",
   "status": "DEPLOYING",
+  "type": "vllm",
+  "replicas": 1,
   "endpoint": "http://10.0.0.44:8000/llama-3.3-8b"
 }
 ```
 
 ### POST /api/serve/undeploy
-Retire un modèle d'inférence.
+Retire une application Ray Serve.
 
 **Request**:
 ```json
@@ -212,10 +228,7 @@ Retire un modèle d'inférence.
 }
 ```
 
-**Response** (204 No Content):
-```
-Model undeployed successfully
-```
+**Response** (204 No Content)
 
 ---
 

@@ -1,0 +1,38 @@
+# ml-compute configuration
+# Endpoints et constantes du cluster Ray
+
+ray:
+  dashboard_url: "http://localhost:8265"
+  serve_url: "http://localhost:8000"
+  gcs_port: 6380
+  head_node: "10.0.0.44"
+
+api:
+  host: "0.0.0.0"
+  port: 9469
+  log_level: "info"
+
+workers:
+  onyxpoint:
+    ip: "10.0.0.86"
+    num_gpus: 1
+    gpu_type: "T1000 8GB"
+  glia:
+    ip: "10.0.0.45"
+    num_cpus: 8
+  axon:
+    ip: "10.0.0.21"
+    num_cpus: 4
+
+models:
+  base_dir: "/opt/onyx/skills/ml-compute/models"
+  supported_types:
+    - yolo
+    - efficientnet
+    - vllm
+    - custom
+
+serve:
+  default_num_replicas: 1
+  default_gpu_memory_utilization: 0.7
+  http_timeout: 15.0

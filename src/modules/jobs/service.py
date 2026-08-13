@@ -1,9 +1,12 @@
 """Ray Jobs API service layer."""
 
 import logging
+import os
 from typing import Any
 
 logger = logging.getLogger(__name__)
+
+RAY_DASHBOARD_URL = os.environ.get("RAY_DASHBOARD_URL", "http://localhost:8265")
 
 
 async def submit_job(
@@ -29,7 +32,7 @@ async def submit_job(
     try:
         from ray.job_submission import JobSubmissionClient
 
-        client = JobSubmissionClient(address="http://10.0.0.44:8265")
+        client = JobSubmissionClient(address=RAY_DASHBOARD_URL)
 
         job_id = await client.submit_job(
             entrypoint=entrypoint,
@@ -67,7 +70,7 @@ async def get_job_status(job_id: str) -> dict[str, Any]:
     try:
         from ray.job_submission import JobSubmissionClient
 
-        client = JobSubmissionClient(address="http://10.0.0.44:8265")
+        client = JobSubmissionClient(address=RAY_DASHBOARD_URL)
 
         status = await client.get_job_status(job_id)
         logs = await client.get_job_logs(job_id)
@@ -97,7 +100,7 @@ async def list_jobs(
     try:
         from ray.job_submission import JobSubmissionClient
 
-        client = JobSubmissionClient(address="http://10.0.0.44:8265")
+        client = JobSubmissionClient(address=RAY_DASHBOARD_URL)
 
         jobs = await client.list_jobs()
 
@@ -129,7 +132,7 @@ async def delete_job(job_id: str) -> dict[str, str]:
     try:
         from ray.job_submission import JobSubmissionClient
 
-        client = JobSubmissionClient(address="http://10.0.0.44:8265")
+        client = JobSubmissionClient(address=RAY_DASHBOARD_URL)
 
         await client.stop_job(job_id)
 

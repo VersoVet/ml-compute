@@ -31,6 +31,7 @@ graph TB
     Portal -->|GET /api/nodes| API
     BoneML -->|POST /api/jobs| API
     BoneRec -->|POST /api/serve| API
+    Portal -->|GET /api/serve/status| API
 ```
 
 ## Module Interactions
@@ -42,7 +43,7 @@ graph LR
     subgraph Modules["Core Modules"]
         Jobs["Jobs Module<br/>Ray Jobs API proxy"]
         Nodes["Nodes Module<br/>Worker monitoring"]
-        Serve["Serve Module<br/>Inference deployments"]
+        Serve["Serve Module<br/>Ray Serve management<br/>(deploy/undeploy/status)"]
         Models["Models Module<br/>Registry"]
     end
 
@@ -50,7 +51,12 @@ graph LR
         JobReq["JobSubmitRequest"]
         JobRes["JobResponse"]
         NodesRes["NodesResponse"]
+        DeployReq["DeployRequest"]
+        UndeployReq["UndeployRequest"]
+        ServeRes["ServeDeploymentsResponse"]
     end
+
+    RayDash["Ray Dashboard HTTP API<br/>:8265"]
 
     Main -->|include_router| Jobs
     Main -->|include_router| Nodes
@@ -59,7 +65,12 @@ graph LR
 
     Jobs -->|service.py| JobReq
     Jobs -->|routes.py| JobRes
+    Nodes -->|httpx async| RayDash
     Nodes -->|service.py| NodesRes
+    Serve -->|httpx async| RayDash
+    Serve -->|routes.py| DeployReq
+    Serve -->|routes.py| UndeployReq
+    Serve -->|routes.py| ServeRes
 ```
 
 ## Data Flow: Job Submission

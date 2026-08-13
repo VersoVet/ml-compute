@@ -38,16 +38,18 @@ Proxy vers Ray Jobs API. Gère la soumission, le suivi et l'arrêt des jobs ML.
 - `DELETE /api/jobs/{id}`: Arrêter un job
 
 ### 2. **serve** (`src/modules/serve/`)
-Gestion des déploiements Ray Serve (modèles d'inférence).
+Gestion des déploiements Ray Serve (modèles d'inférence). Implémentation complète via appels HTTP async (httpx) au Ray Dashboard REST API (port 8265), utilisant l'API Serve v2 (applications-based).
 
 **Fichiers**:
-- `service.py`: Logique métier (deploy, undeploy, list_deployments)
-- `routes.py`: Endpoints FastAPI (/api/serve/*)
+- `service.py`: Logique métier via Ray Dashboard HTTP API (list_deployments, get_serve_status, deploy_model, undeploy_model, _resolve_import_path). Appels: GET/PUT/DELETE sur `/api/serve/applications/`.
+- `routes.py`: Endpoints FastAPI (/api/serve/*) avec modeles Pydantic de validation (DeployRequest, UndeployRequest).
+- `tests/test_serve.py`: 13 tests unitaires couvrant service et routes.
 
 **Endpoints**:
-- `GET /api/serve/deployments`: Lister les modèles servis
-- `POST /api/serve/deploy`: Déployer un modèle
-- `POST /api/serve/undeploy`: Retirer un modèle
+- `GET /api/serve/deployments`: Lister les modèles servis (via GET /api/serve/applications/ sur Ray Dashboard)
+- `GET /api/serve/status`: Statut global Ray Serve (nombre d'applications, proxy location)
+- `POST /api/serve/deploy`: Deployer un modele (via PUT /api/serve/applications/ sur Ray Dashboard). Accepte un `DeployRequest` (name, type, model, num_replicas, num_gpus, gpu_memory_utilization). Retourne 202.
+- `POST /api/serve/undeploy`: Retirer un modele (via DELETE /api/serve/applications/{name} sur Ray Dashboard). Accepte un `UndeployRequest` (name). Retourne 204.
 
 ### 3. **nodes** (`src/modules/nodes/`)
 Monitoring des workers Ray (GPU, CPU, RAM, status).
@@ -89,9 +91,10 @@ ml-compute/
 │       │
 │       ├── serve/
 │       │   ├── __init__.py
-│       │   ├── service.py      # Ray Serve management
-│       │   ├── routes.py
+│       │   ├── service.py      # Ray Serve management (Dashboard HTTP API)
+│       │   ├── routes.py       # Routes + Pydantic models (DeployRequest, UndeployRequest)
 │       │   └── tests/
+│       │       └── test_serve.py  # 13 tests unitaires
 │       │
 │       ├── nodes/
 │       │   ├── __init__.py
@@ -143,7 +146,7 @@ ml-compute/
 2. ✅ FastAPI wrapper (main.py) + health/nodes endpoints
 3. ✅ Module jobs: proxy Ray Jobs API
 4. ⏳ Workers Ray installés sur OnyxPoint, Glia, Axon
-5. ⏳ Module serve: gestion deployments Ray Serve
+5. ✅ Module serve: gestion deployments Ray Serve (Dashboard HTTP API, Pydantic models, 13 tests)
 6. ⏳ Module models: listing des modèles
 7. ⏳ Tests end-to-end: jobs training depuis bone-annotator
 8. ⏳ Migration code training depuis bone-recognition
