@@ -12,7 +12,7 @@ graph TB
 
     subgraph Workers["Workers (External)"]
         OP["OnyxPoint (10.0.0.86)<br/>GPU: T1000 8GB<br/>num_gpus=1<br/>YOLO/PyTorch"]
-        Glia["Glia<br/>CPU Worker<br/>num_cpus=8<br/>Preprocessing"]
+        Glia["Glia (10.0.0.8)<br/>2x Xeon E5-2630<br/>num_cpus=20, 62GB RAM<br/>Preprocessing/CPU Inference"]
         Axon["Axon (10.0.0.21)<br/>CPU Worker<br/>num_cpus=4<br/>Grobid/Text"]
     end
 

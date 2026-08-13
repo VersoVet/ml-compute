@@ -138,7 +138,7 @@ Job stopped successfully
     {
       "node_id": "87654321-dcba",
       "node_name": "glia",
-      "node_ip": "10.0.0.45",
+      "node_ip": "10.0.0.8",
       "is_head": false,
       "resources": {
         "CPU": 8.0,

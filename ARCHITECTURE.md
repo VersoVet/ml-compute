@@ -13,11 +13,11 @@ OnyxSoma (10.0.0.44:9469) — Head Node
 ├── Ray Dashboard (:8265)
 └── Ray Serve (:8000)
 
-Workers distants (ray start --address=10.0.0.44:6379)
+Workers distants (ray start --address=10.0.0.44:6380)
 ├── OnyxPoint (10.0.0.86)
 │   └── GPU Worker (T1000 8GB, num_gpus=1)
-├── Glia
-│   └── CPU Worker (num_cpus=8, preprocessing)
+├── Glia (10.0.0.8)
+│   └── CPU Worker (2x Xeon E5-2630, num_cpus=20, 62GB RAM)
 └── Axon (10.0.0.21)
     └── CPU Worker (num_cpus=4, Grobid tasks)
 ```

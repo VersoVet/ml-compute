@@ -18,8 +18,10 @@ workers:
     num_gpus: 1
     gpu_type: "T1000 8GB"
   glia:
-    ip: "10.0.0.45"
-    num_cpus: 8
+    ip: "10.0.0.8"
+    num_cpus: 20
+    ram_gb: 62
+    cpu_model: "2x Intel Xeon E5-2630"
   axon:
     ip: "10.0.0.21"
     num_cpus: 4
