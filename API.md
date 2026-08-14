@@ -155,6 +155,30 @@ Job stopped successfully
 }
 ```
 
+### GET /api/nodes/summary
+Résumé agrégé des ressources cluster (CPU, GPU, mémoire) avec utilisation %.
+
+**Response**:
+```json
+{
+  "total": {
+    "cpu": 30.0,
+    "gpu": 1.0,
+    "memory_bytes": 70300000000
+  },
+  "available": {
+    "cpu": 28.0,
+    "gpu": 1.0,
+    "memory_bytes": 65000000000
+  },
+  "utilization": {
+    "cpu_percent": 6.7,
+    "gpu_percent": 0.0,
+    "memory_percent": 7.5
+  }
+}
+```
+
 ---
 
 ## Serve API
