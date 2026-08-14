@@ -25,12 +25,12 @@
 - [x] Module **jobs** (Ray Jobs API proxy)
   - [x] service.py: submit_job, get_status, get_logs, delete_job
   - [x] routes.py: POST/GET/DELETE /api/jobs
-  - [ ] Tests unitaires
+  - [x] Tests unitaires (9 tests)
 
 - [x] Module **nodes** (Monitoring workers via HTTP Dashboard API)
   - [x] service.py: query_nodes, get_resource_summary
   - [x] routes.py: GET /api/nodes, GET /api/nodes/summary
-  - [ ] Tests unitaires
+  - [x] Tests unitaires (5 tests)
 
 - [x] Module **serve** (Ray Serve via HTTP Dashboard API)
   - [x] service.py: deploy, undeploy, list_deployments, get_serve_status
@@ -40,7 +40,7 @@
 - [x] Module **models** (Model registry)
   - [x] service.py: scan_models, get_model_by_id
   - [x] routes.py: GET /api/models
-  - [ ] Tests unitaires
+  - [x] Tests unitaires (5 tests)
 
 ## Phase 4: Infrastructure Ray (DONE)
 

@@ -10,17 +10,11 @@ Provides HTTP API for:
 import logging
 import os
 from contextlib import asynccontextmanager
+from typing import Any
 
 import httpx
 from fastapi import FastAPI, HTTPException
 from onyx_sdk import OnyxClient
-
-# Status constants for SDK visibility
-SKILL_STATUS_UP = "UP"
-SKILL_STATUS_DOWN = "DOWN"
-SKILL_STATUS_WORKING = "WORKING"
-
-_skill_status = None
 
 from src.models import (
     HealthResponse,
@@ -39,7 +33,7 @@ logger = logging.getLogger("ml-compute")
 class RayClient:
     """Wrapper for Ray cluster via HTTP Dashboard API."""
 
-    def __init__(self, dashboard_url: str = None):
+    def __init__(self, dashboard_url: str | None = None):
         """Initialize Ray client.
 
         Args:
@@ -66,7 +60,7 @@ class RayClient:
         """Disconnect from Ray (no-op for HTTP mode)."""
         logger.info("Disconnected from Ray (HTTP mode)")
 
-    async def health_check(self) -> dict:
+    async def health_check(self) -> dict[str, Any]:
         """Check Ray cluster health via dashboard API.
 
         Returns:
@@ -191,7 +185,7 @@ async def ready() -> ReadyResponse:
     # Signal active processing during readiness check
     if onyx:
         try:
-            await onyx.publish_status("WORKING")
+            onyx.publish_status("WORKING")
         except Exception as e:
             logger.debug(f"Failed to signal WORKING during readiness check: {e}")
 
@@ -250,7 +244,7 @@ async def get_pages() -> PagesResponse:
 
 
 @app.get("/", tags=["ui"])
-async def root() -> dict:
+async def root() -> dict[str, str]:
     """Root endpoint returning API info.
 
     Returns:
@@ -259,7 +253,7 @@ async def root() -> dict:
     # Signal active processing if available
     if onyx:
         try:
-            await onyx.publish_status("WORKING")
+            onyx.publish_status("WORKING")
         except Exception:
             pass
 
