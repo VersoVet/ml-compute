@@ -15,8 +15,11 @@ api:
 workers:
   onyxpoint:
     ip: "10.0.0.86"
+    num_cpus: 10
     num_gpus: 1
-    gpu_type: "T1000 8GB"
+    ram_gb: 23
+    cpu_model: "Intel i5-10400"
+    gpu_type: "NVIDIA T1000 8GB"
   glia:
     ip: "10.0.0.8"
     num_cpus: 20

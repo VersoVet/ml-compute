@@ -6,14 +6,14 @@
 graph TB
     subgraph Soma["OnyxSoma (10.0.0.44)"]
         API["FastAPI Wrapper<br/>:9469<br/>OnyxClient"]
-        RayHead["Ray Head Node<br/>:6379 GCS<br/>:8265 Dashboard<br/>:8000 Serve"]
+        RayHead["Ray Head Node<br/>:6380 GCS<br/>:8265 Dashboard<br/>:8000 Serve<br/>ray:2.35.0-py312"]
         API ---|Ray Client| RayHead
     end
 
     subgraph Workers["Workers (External)"]
-        OP["OnyxPoint (10.0.0.86)<br/>GPU: T1000 8GB<br/>num_gpus=1<br/>YOLO/PyTorch"]
-        Glia["Glia (10.0.0.8)<br/>2x Xeon E5-2630<br/>num_cpus=20, 62GB RAM<br/>Preprocessing/CPU Inference"]
-        Axon["Axon (10.0.0.21)<br/>CPU Worker<br/>num_cpus=4<br/>Grobid/Text"]
+        OP["OnyxPoint (10.0.0.86)<br/>i5-10400, T1000 8GB<br/>num_cpus=10, num_gpus=1, 23GB RAM<br/>Docker ray:2.35.0-py312 --gpus all"]
+        Glia["Glia (10.0.0.8)<br/>2x Xeon E5-2630<br/>num_cpus=20, 47GB RAM<br/>Docker ray:2.35.0-py312 --shm-size=20g"]
+        Axon["Axon (10.0.0.21)<br/>CPU Worker<br/>num_cpus=4<br/>Non connecté"]
     end
 
     RayHead -->|ray start --address| OP

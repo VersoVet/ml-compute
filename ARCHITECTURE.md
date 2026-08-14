@@ -13,13 +13,13 @@ OnyxSoma (10.0.0.44:9469) — Head Node
 ├── Ray Dashboard (:8265)
 └── Ray Serve (:8000)
 
-Workers distants (ray start --address=10.0.0.44:6380)
+Workers distants (Docker rayproject/ray:2.35.0-py312, --network host)
 ├── OnyxPoint (10.0.0.86)
-│   └── GPU Worker (T1000 8GB, num_gpus=1)
+│   └── GPU Worker (i5-10400, T1000 8GB, num_cpus=10, num_gpus=1, 23GB RAM)
 ├── Glia (10.0.0.8)
-│   └── CPU Worker (2x Xeon E5-2630, num_cpus=20, 62GB RAM)
+│   └── CPU Worker (2x Xeon E5-2630, num_cpus=20, 47GB RAM, --shm-size=20g)
 └── Axon (10.0.0.21)
-    └── CPU Worker (num_cpus=4, Grobid tasks)
+    └── CPU Worker (num_cpus=4, Grobid tasks) — non connecté
 ```
 
 ## Modules
@@ -145,7 +145,7 @@ ml-compute/
 1. ✅ Docker Compose avec Ray head node
 2. ✅ FastAPI wrapper (main.py) + health/nodes endpoints
 3. ✅ Module jobs: proxy Ray Jobs API
-4. ⏳ Workers Ray installés sur OnyxPoint, Glia, Axon
+4. ✅ Workers Ray: OnyxPoint (GPU) et Glia (CPU) connectés via Docker
 5. ✅ Module serve: gestion deployments Ray Serve (Dashboard HTTP API, Pydantic models, 13 tests)
 6. ⏳ Module models: listing des modèles
 7. ⏳ Tests end-to-end: jobs training depuis bone-annotator
