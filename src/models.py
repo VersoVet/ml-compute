@@ -42,7 +42,7 @@ class JobResponse(BaseModel):
     job_id: str = Field(..., description="Job ID")
     status: str = Field(..., description="Job status: SUBMITTED/RUNNING/SUCCEEDED/FAILED")
     name: str = Field(..., description="Job name")
-    submission_time: datetime = Field(..., description="Submission timestamp")
+    submission_time: datetime | None = Field(None, description="Submission timestamp")
     start_time: datetime | None = Field(None, description="Start timestamp")
     end_time: datetime | None = Field(None, description="End timestamp")
     runtime: float | None = Field(None, description="Runtime in seconds")
