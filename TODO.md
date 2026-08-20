@@ -58,17 +58,18 @@
 - [x] Health check OK sur OnyxSoma
 - [x] Créer config/ml-compute.yaml
 
-## Phase 6: Migration Training Code
+## Phase 6: Job Templates (IN PROGRESS)
 
-- [ ] Migrer code training depuis bone-recognition
-  - [ ] Architecture EfficientNet-B0
-  - [ ] Training loop + curriculum
-  - [ ] Loss functions
-  
-- [ ] Migrer code training depuis bone-annotator
-  - [ ] Scripts YOLO training
-  
-- [ ] Créer job templates dans jobs/
+- [x] Créer structure jobs/
+- [x] Créer job template bone-recognition
+  - [x] train_efficientnet.py (Phase A + B via BoneTrainer)
+  - [x] README.md avec exemples curl
+- [x] Créer job template bone-annotator
+  - [x] train_yolo.py (ultralytics YOLO)
+  - [x] README.md avec exemples curl
+- [x] Mettre à jour ARCHITECTURE.md avec job templates
+- [ ] Tester les jobs avec pytest
+- [ ] Valider avec /forge-validate-full
 
 ## Phase 7: Tests End-to-End
 

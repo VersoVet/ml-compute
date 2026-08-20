@@ -108,15 +108,17 @@ ml-compute/
 │           ├── routes.py
 │           └── tests/
 │
-├── jobs/                       # Job templates pré-configurés
+├── jobs/                       # Job templates Ray (soumis via /api/jobs)
+│   ├── __init__.py
 │   ├── bone-annotator/
-│   │   ├── train_yolo.py       # Training YOLO
-│   │   └── predict_batch.py    # Batch inference
+│   │   ├── __init__.py
+│   │   ├── train_yolo.py       # YOLOv8 training (ultralytics)
+│   │   └── README.md            # Comment soumettre le job
 │   │
-│   └── bone-recognition/       # Migré depuis bone-recognition skill
-│       ├── train_efficientnet.py
-│       ├── build_shape_model.py
-│       └── data/
+│   └── bone-recognition/       # EfficientNet-B0 training (Phase A+B)
+│       ├── __init__.py
+│       ├── train_efficientnet.py # BoneTrainer multi-task
+│       └── README.md             # Comment soumettre le job
 │
 ├── models/                     # Stockage modèles entraînés
 │   ├── bone-annotator/
@@ -140,6 +142,25 @@ ml-compute/
 | `ultralytics` | 8.0.220 | YOLO training/inference |
 | `onyx-sdk` | 2.1.0 | Intégration Redis/Events |
 
+## Job Templates
+
+### bone-recognition Training (`jobs/bone-recognition/train_efficientnet.py`)
+Script Ray Job pour entraîner EfficientNet-B0 avec curriculum learning multi-task.
+- **Phase A**: Pre-training angle (self-supervised, 20 epochs)
+- **Phase B**: Supervised training (multi-task : classification, density, landmarks, triplet loss)
+- Support DDP, AMP, MLflow tracking
+- Paramètres via env vars : DATA_DIR, CHECKPOINT_DIR, PHASE, EPOCHS, BATCH_SIZE
+
+### bone-annotator Training (`jobs/bone-annotator/train_yolo.py`)
+Script Ray Job pour entraîner YOLOv8 détection d'objets.
+- Modèles : yolov8n/s/m/l/x (configurable)
+- Sauvegarde best.pt dans ML_MODELS_DIR
+- Logging métriques (mAP50, mAP50-95)
+- Paramètres via env vars : DATASET_YAML, MODEL_BASE, EPOCHS, BATCH_SIZE
+
+Soumettre via : `curl -X POST http://10.0.0.44:9469/api/jobs -d '{...}'`
+(Voir `jobs/{skeleton}/README.md` pour exemples complets)
+
 ## Cycle de développement
 
 1. ✅ Docker Compose avec Ray head node
@@ -147,9 +168,9 @@ ml-compute/
 3. ✅ Module jobs: proxy Ray Jobs API
 4. ✅ Workers Ray: OnyxPoint (GPU) et Glia (CPU) connectés via Docker
 5. ✅ Module serve: gestion deployments Ray Serve (Dashboard HTTP API, Pydantic models, 13 tests)
-6. ⏳ Module models: listing des modèles
-7. ⏳ Tests end-to-end: jobs training depuis bone-annotator
-8. ⏳ Migration code training depuis bone-recognition
+6. ✅ Job templates Phase A: bone-recognition (EfficientNet) et bone-annotator (YOLO)
+7. ⏳ Job templates Phase B: predict_batch, inference endpoints
+8. ⏳ Tests end-to-end: soumettre jobs via /api/jobs
 
 ## Principes de développement
 

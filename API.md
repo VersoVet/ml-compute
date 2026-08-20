@@ -288,6 +288,119 @@ Liste les modèles ML disponibles (dans /opt/onyx/skills/ml-compute/models/).
 
 ---
 
+---
+
+## Job Templates
+
+Les job templates sont des scripts Python autonomes exécutables via Ray Jobs API. Ils sont stockés dans `jobs/` et peuvent être soumis via `POST /api/jobs`.
+
+### bone-recognition Training (`jobs/bone-recognition/train_efficientnet.py`)
+
+Entraîne EfficientNet-B0 avec curriculum learning multi-task.
+
+**Phases** :
+- Phase A : Pre-training angle (self-supervised, 20 epochs)
+- Phase B : Supervised multi-task training (classification, density, landmarks, triplet loss, 50 epochs)
+
+**Soumettre Phase A (pretrain only)** :
+```bash
+curl -X POST http://10.0.0.44:9469/api/jobs \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "bone-pretrain-'$(date +%s)'",
+    "entrypoint": "python jobs/bone-recognition/train_efficientnet.py",
+    "runtime_env": {
+      "working_dir": "/opt/onyx/skills/ml-compute",
+      "env_vars": {
+        "DATA_DIR": "/opt/onyx/skills/bone-recognition/data/processed",
+        "CHECKPOINT_DIR": "/opt/onyx/skills/ml-compute/models/bone-recognition",
+        "PHASE": "pretrain",
+        "EPOCHS": "20"
+      }
+    },
+    "submit_kwargs": {"num_cpus": 8, "num_gpus": 1, "memory": 16000000000}
+  }'
+```
+
+**Soumettre Phase B (full training A + B)** :
+```bash
+curl -X POST http://10.0.0.44:9469/api/jobs \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "bone-train-'$(date +%s)'",
+    "entrypoint": "python jobs/bone-recognition/train_efficientnet.py",
+    "runtime_env": {
+      "working_dir": "/opt/onyx/skills/ml-compute",
+      "env_vars": {
+        "DATA_DIR": "/opt/onyx/skills/bone-recognition/data/processed",
+        "CHECKPOINT_DIR": "/opt/onyx/skills/ml-compute/models/bone-recognition",
+        "PHASE": "train",
+        "EPOCHS": "50",
+        "BATCH_SIZE": "16",
+        "LEARNING_RATE": "1e-4"
+      }
+    },
+    "submit_kwargs": {"num_cpus": 8, "num_gpus": 1, "memory": 16000000000}
+  }'
+```
+
+**Env vars** : DATA_DIR (required), CHECKPOINT_DIR, PHASE (pretrain|train), EPOCHS, BATCH_SIZE, LEARNING_RATE, DEVICE
+
+Voir `jobs/bone-recognition/README.md` pour docs complètes.
+
+### bone-annotator Training (`jobs/bone-annotator/train_yolo.py`)
+
+Entraîne YOLOv8 pour la détection d'objets (bone annotation).
+
+**Soumettre YOLOv8m training (medium model, ~100 epochs)** :
+```bash
+curl -X POST http://10.0.0.44:9469/api/jobs \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "bone-yolo-'$(date +%s)'",
+    "entrypoint": "python jobs/bone-annotator/train_yolo.py",
+    "runtime_env": {
+      "working_dir": "/opt/onyx/skills/ml-compute",
+      "env_vars": {
+        "DATASET_YAML": "/opt/onyx/skills/bone-ml/datasets/current/dataset.yaml",
+        "MODEL_BASE": "yolov8m.pt",
+        "EPOCHS": "100",
+        "BATCH_SIZE": "16",
+        "LEARNING_RATE": "0.001",
+        "ML_MODELS_DIR": "/opt/onyx/skills/bone-ml/models"
+      }
+    },
+    "submit_kwargs": {"num_cpus": 8, "num_gpus": 1, "memory": 16000000000}
+  }'
+```
+
+**Soumettre YOLOv8n training (nano model, fast/cheap)** :
+```bash
+curl -X POST http://10.0.0.44:9469/api/jobs \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "bone-yolo-quick-'$(date +%s)'",
+    "entrypoint": "python jobs/bone-annotator/train_yolo.py",
+    "runtime_env": {
+      "working_dir": "/opt/onyx/skills/ml-compute",
+      "env_vars": {
+        "DATASET_YAML": "/opt/onyx/skills/bone-ml/datasets/current/dataset.yaml",
+        "MODEL_BASE": "yolov8n.pt",
+        "EPOCHS": "30",
+        "BATCH_SIZE": "32",
+        "ML_MODELS_DIR": "/opt/onyx/skills/bone-ml/models"
+      }
+    },
+    "submit_kwargs": {"num_cpus": 4, "num_gpus": 1, "memory": 8000000000}
+  }'
+```
+
+**Env vars** : DATASET_YAML (required), MODEL_BASE, EPOCHS, IMGSZ, BATCH_SIZE, LEARNING_RATE, DEVICE, ML_MODELS_DIR
+
+Voir `jobs/bone-annotator/README.md` pour docs complètes et guide de sélection du modèle.
+
+---
+
 ## Examples cURL
 
 ```bash
@@ -300,7 +413,13 @@ curl -X POST http://10.0.0.44:9469/api/jobs \
   -d '{
     "name": "yolo-train-daily",
     "entrypoint": "python jobs/bone-annotator/train_yolo.py",
-    "submit_kwargs": {"num_gpus": 1, "num_cpus": 4}
+    "runtime_env": {
+      "working_dir": "/opt/onyx/skills/ml-compute",
+      "env_vars": {
+        "DATASET_YAML": "/opt/onyx/skills/bone-ml/datasets/current/dataset.yaml"
+      }
+    },
+    "submit_kwargs": {"num_gpus": 1, "num_cpus": 4, "memory": 16000000000}
   }'
 
 # Lister les jobs en cours

@@ -126,13 +126,16 @@ sequenceDiagram
 ├── models/                     # ML models (backup)
 │   ├── bone-annotator/         # YOLO models
 │   └── bone-recognition/       # EfficientNet models
-└── jobs/                       # Job templates
+└── jobs/                       # Job templates Ray
+    ├── __init__.py
     ├── bone-annotator/
-    │   ├── train_yolo.py
-    │   └── predict_batch.py
+    │   ├── __init__.py
+    │   ├── train_yolo.py          # YOLOv8 training (ultralytics)
+    │   └── README.md               # Doc: env vars, exemples curl
     └── bone-recognition/
-        ├── train_efficientnet.py
-        └── build_shape_model.py
+        ├── __init__.py
+        ├── train_efficientnet.py   # EfficientNet-B0 (Phase A+B)
+        └── README.md               # Doc: env vars, exemples curl
 ```
 
 ## Deployment Target
