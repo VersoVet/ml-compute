@@ -115,10 +115,15 @@ ml-compute/
 │   │   ├── train_yolo.py       # YOLOv8 training (ultralytics)
 │   │   └── README.md            # Comment soumettre le job
 │   │
-│   └── bone-recognition/       # EfficientNet-B0 training (Phase A+B)
+│   ├── bone-recognition/       # EfficientNet-B0 training (Phase A+B)
+│   │   ├── __init__.py
+│   │   ├── train_efficientnet.py # BoneTrainer multi-task
+│   │   └── README.md             # Comment soumettre le job
+│   │
+│   └── bone-ml/               # Dual-Head U-Net multitask training
 │       ├── __init__.py
-│       ├── train_efficientnet.py # BoneTrainer multi-task
-│       └── README.md             # Comment soumettre le job
+│       ├── train_multitask.py  # U-Net segmentation + landmarks
+│       └── README.md            # Comment soumettre le job
 │
 ├── models/                     # Stockage modèles entraînés
 │   ├── bone-annotator/
@@ -157,6 +162,15 @@ Script Ray Job pour entraîner YOLOv8 détection d'objets.
 - Sauvegarde best.pt dans ML_MODELS_DIR
 - Logging métriques (mAP50, mAP50-95)
 - Paramètres via env vars : DATASET_YAML, MODEL_BASE, EPOCHS, BATCH_SIZE
+
+### bone-ml Multitask Training (`jobs/bone-ml/train_multitask.py`)
+Script Ray Job pour entraîner Dual-Head U-Net (segmentation + landmarks).
+- **Segmentation Head**: Zones anatomiques (os)
+- **Landmarks Head**: Gaussian heatmaps avec SGR (Segmentation-Guided Refinement)
+- Encodeur partagé : ResNet34/50/Swin (pretrained ImageNet)
+- Données depuis label-generator API + PostgreSQL (annotations validées)
+- Support fine-tuning via PARENT_MODEL
+- Paramètres via env vars : BONE_TYPE, EPOCHS, BATCH_SIZE, ENCODER_NAME, PG_PASSWORD, etc.
 
 Soumettre via : `curl -X POST http://10.0.0.44:9469/api/jobs -d '{...}'`
 (Voir `jobs/{skeleton}/README.md` pour exemples complets)

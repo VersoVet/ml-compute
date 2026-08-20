@@ -399,6 +399,63 @@ curl -X POST http://10.0.0.44:9469/api/jobs \
 
 Voir `jobs/bone-annotator/README.md` pour docs complètes et guide de sélection du modèle.
 
+### bone-ml Multitask Training (`jobs/bone-ml/train_multitask.py`)
+
+Entraîne un Dual-Head U-Net pour segmentation de zones anatomiques + landmarks heatmaps.
+
+**Soumettre Dual-Head U-Net training (humerus, ResNet34)** :
+```bash
+curl -X POST http://10.0.0.44:9469/api/jobs \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "bone-ml-multitask-humerus-'$(date +%s)'",
+    "entrypoint": "python jobs/bone-ml/train_multitask.py",
+    "runtime_env": {
+      "working_dir": "/opt/onyx/skills/ml-compute",
+      "env_vars": {
+        "BONE_TYPE": "humerus",
+        "EPOCHS": "100",
+        "BATCH_SIZE": "4",
+        "IMG_SIZE": "1408",
+        "ENCODER_NAME": "resnet34",
+        "DEVICE": "0",
+        "ML_MODELS_DIR": "/mnt/ml-store/models",
+        "PG_PASSWORD": "vault-password",
+        "SOURCE_FILTER": "manual,corrected_ml"
+      }
+    },
+    "submit_kwargs": {"num_cpus": 8, "num_gpus": 1, "memory": 16000000000}
+  }'
+```
+
+**Soumettre fine-tuning (ResNet50, parent model)** :
+```bash
+curl -X POST http://10.0.0.44:9469/api/jobs \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "bone-ml-finetune-femur-'$(date +%s)'",
+    "entrypoint": "python jobs/bone-ml/train_multitask.py",
+    "runtime_env": {
+      "working_dir": "/opt/onyx/skills/ml-compute",
+      "env_vars": {
+        "BONE_TYPE": "femur",
+        "EPOCHS": "50",
+        "BATCH_SIZE": "2",
+        "ENCODER_NAME": "resnet50",
+        "GENERATION": "2",
+        "PARENT_MODEL": "/mnt/ml-store/models/femur_multitask_gen1_best.pt",
+        "LEARNING_RATE": "0.00005",
+        "PG_PASSWORD": "vault-password"
+      }
+    },
+    "submit_kwargs": {"num_cpus": 12, "num_gpus": 1, "memory": 24000000000}
+  }'
+```
+
+**Env vars** : BONE_TYPE, EPOCHS, BATCH_SIZE, IMG_SIZE, LEARNING_RATE, ENCODER_NAME, DEVICE, ML_MODELS_DIR, ML_RUNS_DIR, GENERATION, PARENT_MODEL (optional), LABEL_GENERATOR_URL, PG_HOST, PG_PORT, PG_DB, PG_USER, PG_PASSWORD (required)
+
+Voir `jobs/bone-ml/README.md` pour docs complètes, guide des encodeurs, et exemple pipeline complet.
+
 ---
 
 ## Examples cURL

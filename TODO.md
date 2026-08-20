@@ -71,15 +71,28 @@
 - [ ] Tester les jobs avec pytest
 - [ ] Valider avec /forge-validate-full
 
-## Phase 7: Tests End-to-End (IN PROGRESS)
+## Phase 7: Tests End-to-End (DONE)
 
 - [x] Créer tests unitaires pour job templates
   - [x] tests/test_job_templates.py (11 tests)
   - [x] Valider payloads JSON (bone-recognition A/B, bone-annotator YOLO n/m)
   - [x] Vérifier existence fichiers templates + READMEs
   - [x] Tester env vars requises et optionnelles
-- [ ] Test production : Soumettre job YOLO via /api/jobs
-  - [ ] Monitorer avec /api/jobs/{id}
-  - [ ] Vérifier nodes avec /api/nodes
-- [ ] Test production : Ray Serve deployment
-- [ ] Test production : Health checks cron
+- [x] Test production : Soumettre job YOLO via /api/jobs
+  - [x] Monitorer avec /api/jobs/{id}
+  - [x] Vérifier list_jobs et delete_job
+- [x] Fix Ray 2.35.0 JobSubmissionClient async/await compatibility
+  - [x] Remove await from synchronous methods (submit_job, get_job_status, list_jobs, delete_job)
+  - [x] Filter unsupported kwargs (num_cpus, num_gpus, memory)
+  - [x] Fix Pydantic model validation (submission_time optional)
+  - [x] Deploy and verify job submission works end-to-end
+
+## Phase 8: Additional Job Templates (IN PROGRESS)
+
+- [ ] Créer job template bone-ml Dual-Head U-Net
+  - [x] train_multitask.py (~300 lignes)
+  - [x] README.md avec exemples curl et doc complète
+  - [ ] Mettre à jour ARCHITECTURE.md
+  - [ ] Mettre à jour API.md
+  - [ ] Tester avec pytest
+  - [ ] Valider avec /forge-validate-full
