@@ -21,7 +21,7 @@ async def submit_job(
         name: Job name.
         entrypoint: Command to run.
         runtime_env: Ray runtime environment config.
-        submit_kwargs: Ray submission parameters (num_cpus, num_gpus, etc).
+        submit_kwargs: Ray submission parameters (ignored for Ray 2.35.0).
 
     Returns:
         Job submission response dict with job_id, status, timestamp.
@@ -34,12 +34,19 @@ async def submit_job(
 
         client = JobSubmissionClient(address=RAY_DASHBOARD_URL)
 
-        job_id = await client.submit_job(
+        # Ray 2.35.0 JobSubmissionClient.submit_job() is synchronous, not async
+        # Filter out unsupported kwargs (num_cpus, num_gpus are not directly supported)
+        supported_kwargs = {}
+        for key in submit_kwargs or {}:
+            if key not in ("num_cpus", "num_gpus", "memory"):
+                supported_kwargs[key] = submit_kwargs[key]
+
+        job_id = client.submit_job(
             entrypoint=entrypoint,
             job_id=None,
             runtime_env=runtime_env or {},
             metadata={"name": name},
-            **submit_kwargs or {},
+            **supported_kwargs,
         )
 
         logger.info(f"Job {job_id} submitted: {name}")
@@ -72,8 +79,9 @@ async def get_job_status(job_id: str) -> dict[str, Any]:
 
         client = JobSubmissionClient(address=RAY_DASHBOARD_URL)
 
-        status = await client.get_job_status(job_id)
-        logs = await client.get_job_logs(job_id)
+        # Ray 2.35.0 API methods are synchronous
+        status = client.get_job_status(job_id)
+        logs = client.get_job_logs(job_id)
 
         return {
             "job_id": job_id,
@@ -102,7 +110,7 @@ async def list_jobs(
 
         client = JobSubmissionClient(address=RAY_DASHBOARD_URL)
 
-        jobs = await client.list_jobs()
+        jobs = client.list_jobs()
 
         if status:
             jobs = [j for j in jobs if str(j.status) == status]
@@ -134,7 +142,7 @@ async def delete_job(job_id: str) -> dict[str, str]:
 
         client = JobSubmissionClient(address=RAY_DASHBOARD_URL)
 
-        await client.stop_job(job_id)
+        client.stop_job(job_id)
 
         logger.info(f"Job {job_id} stopped")
 
