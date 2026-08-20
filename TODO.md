@@ -87,12 +87,13 @@
   - [x] Fix Pydantic model validation (submission_time optional)
   - [x] Deploy and verify job submission works end-to-end
 
-## Phase 8: Additional Job Templates (IN PROGRESS)
+## Phase 8: Additional Job Templates (DONE)
 
-- [ ] Créer job template bone-ml Dual-Head U-Net
-  - [x] train_multitask.py (~300 lignes)
+- [x] Créer job template bone-ml Dual-Head U-Net
+  - [x] train_multitask.py (~320 lignes) — Dual-Head U-Net with SGR
   - [x] README.md avec exemples curl et doc complète
-  - [ ] Mettre à jour ARCHITECTURE.md
-  - [ ] Mettre à jour API.md
-  - [ ] Tester avec pytest
-  - [ ] Valider avec /forge-validate-full
+  - [x] Mettre à jour ARCHITECTURE.md
+  - [x] Mettre à jour API.md
+  - [x] Valider avec /forge-validate-full (VALID, 0E, 9W)
+  - [x] Déployer avec /forge-deploy (v0.1.40)
+  - [x] Tester soumission via /api/jobs (successful submission)
