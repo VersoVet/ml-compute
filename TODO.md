@@ -71,10 +71,15 @@
 - [ ] Tester les jobs avec pytest
 - [ ] Valider avec /forge-validate-full
 
-## Phase 7: Tests End-to-End
+## Phase 7: Tests End-to-End (IN PROGRESS)
 
-- [ ] Soumettre job YOLO depuis /api/jobs
-- [ ] Monitorer avec /api/jobs/{id}
-- [ ] Vérifier nodes avec /api/nodes
-- [ ] Tester Ray Serve deployment
-- [ ] Health checks cron en production
+- [x] Créer tests unitaires pour job templates
+  - [x] tests/test_job_templates.py (11 tests)
+  - [x] Valider payloads JSON (bone-recognition A/B, bone-annotator YOLO n/m)
+  - [x] Vérifier existence fichiers templates + READMEs
+  - [x] Tester env vars requises et optionnelles
+- [ ] Test production : Soumettre job YOLO via /api/jobs
+  - [ ] Monitorer avec /api/jobs/{id}
+  - [ ] Vérifier nodes avec /api/nodes
+- [ ] Test production : Ray Serve deployment
+- [ ] Test production : Health checks cron
