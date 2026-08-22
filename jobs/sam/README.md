@@ -1,64 +1,101 @@
-# SAM (Segment Anything Model) Deployment via Ray Serve
+# SAM (Segment Anything Model) Deployment via Docker
 
 Deploy the Segment Anything Model (vit_b) on OnyxCortex GPU worker for interactive annotation with CVAT.
 
 ## ⚠️ CRITICAL: GPU Resource Management
 
-**OnyxCortex has 1 GPU (RTX 4070 SUPER)**. SAM reserves `num_gpus=1` permanently when deployed.
+**OnyxCortex has 1 GPU (RTX 4070 SUPER, 12GB VRAM)**. SAM reserves the GPU exclusively while running.
 
-- While SAM is running → GPU is 100% reserved, training jobs are BLOCKED in PENDING state
+- While SAM Docker container is running → GPU is 100% reserved, training jobs are BLOCKED
 - SAM must be explicitly stopped before launching training jobs
-- GPU becomes available for training only after SAM is stopped
+- GPU becomes available for training only after SAM container stops
 
-**Strategy**: SAM is deployed/stopped on-demand:
-1. **Annotation Phase**: Start SAM, use for annotations, then STOP
-2. **Training Phase**: Launch training jobs (GPU now available)
+**Strategy**: Deploy and stop SAM on-demand via Docker:
+1. **Annotation Phase**: Start SAM container, use for annotations
+2. **Training Phase**: Stop SAM, launch training jobs (GPU now free)
 
 ---
 
-## Prerequisites
+## Quick Start
 
-- Ray cluster running (OnyxSoma head + OnyxCortex worker)
-- Model file: `~/sam-gpu/sam_vit_b_01ec64.pth` on OnyxCortex (375MB)
-- GPU: RTX 4070 SUPER (12GB VRAM) - OnyxCortex ✅
-- Python packages: `segment-anything`, `opencv-python`, `Pillow`, `torch`
+### Prerequisites
+
+- OnyxCortex machine with GPU (RTX 4070 SUPER)
+- SAM model weights: `~/sam-gpu/sam_vit_b_01ec64.pth` (375MB)
+- Docker and NVIDIA Container Toolkit installed
+- ml-compute skill deployed on OnyxSoma (10.0.0.44:9469)
 
 **NOT recommended for OnyxPoint**: T1000 8GB is insufficient (~10GB required for SAM vit_b)
 
----
-
-## Usage: Start / Stop Lifecycle
-
-### Step 1: Start SAM (Before Annotations)
+### Build and Deploy
 
 ```bash
-# Start SAM Serve deployment
-curl -X POST http://10.0.0.44:9469/api/serve/start-sam
+# On OnyxCortex (10.0.0.26):
+cd /opt/onyx/skills/ml-compute
+bash docker/build_and_run_sam.sh
+```
 
-# Response:
+The script will:
+1. Build `onyx/sam:latest` Docker image
+2. Start SAM container on port 9470
+3. Mount GPU and NFS volumes
+4. Verify health check
+
+### Verify SAM is Running
+
+```bash
+# Check container status
+docker ps | grep sam-service
+
+# Check health
+curl http://10.0.0.26:9470/health
+
+# Check readiness
+curl http://10.0.0.26:9470/ready
+```
+
+---
+
+## Using SAM via ml-compute API
+
+Once SAM is running on OnyxCortex, access it through ml-compute proxy endpoints:
+
+### Check SAM Status
+
+```bash
+curl http://10.0.0.44:9469/api/serve/sam/status
+```
+
+Response:
+```json
 {
-  "status": "deployed",
-  "endpoint": "http://10.0.0.44:9470/api/interact",
-  "job_id": "raysubmit_abc123",
-  "message": "SAM deployed successfully, GPU reserved (num_gpus=1)"
+  "status": "healthy",
+  "service": "sam-vit-b"
 }
 ```
 
-### Step 2: Use SAM for Annotations
-
-CVAT or your annotation tool sends POST requests to SAM:
+### Get SAM Info
 
 ```bash
-curl -X POST http://10.0.0.44:9470/api/interact \
+curl http://10.0.0.44:9469/api/serve/sam/info
+```
+
+Returns: model specs, GPU requirements, inference latency, and endpoints.
+
+### Interactive Segmentation
+
+```bash
+curl -X POST http://10.0.0.44:9469/api/serve/sam/interact \
   -H "Content-Type: application/json" \
   -d '{
     "image": "base64_encoded_image",
     "positive_points": [[100, 100], [200, 200]],
-    "negative_points": [[150, 150]],
-    "prompt_labels": [1, 1, 0]
+    "negative_points": [[150, 150]]
   }'
+```
 
-# Response:
+Response:
+```json
 {
   "mask": "base64_encoded_png_mask",
   "area": 12345,
@@ -67,70 +104,34 @@ curl -X POST http://10.0.0.44:9470/api/interact \
 }
 ```
 
-### Step 3: Check SAM Status
-
-```bash
-# Monitor SAM responsiveness
-curl -X GET http://10.0.0.44:9469/api/serve/sam/status
-
-# Response:
-{
-  "status": "running",
-  "latency_ms": 450,
-  "endpoint": "http://10.0.0.44:9470/api/interact"
-}
-```
-
-### Step 4: Stop SAM (Before Training)
-
-**MANDATORY before launching training jobs!**
-
-```bash
-# Stop SAM Serve deployment
-curl -X POST http://10.0.0.44:9469/api/serve/stop-sam
-
-# Response:
-{
-  "status": "stopped",
-  "message": "SAM deployment stopped, GPU is now available for training"
-}
-```
-
-### Step 5: Launch Training (GPU Now Available)
-
-```bash
-# GPU is now free, training can use num_gpus=1
-curl -X POST http://10.0.0.44:9469/api/jobs \
-  -H "Content-Type: application/json" \
-  -d '{
-    "name": "bone-ml-training-after-annotations",
-    "entrypoint": "python jobs/bone-ml/train_multitask.py",
-    "runtime_env": {
-      "working_dir": "/opt/onyx/skills/ml-compute",
-      "env_vars": {
-        "BONE_TYPE": "humerus",
-        "EPOCHS": "100"
-      }
-    },
-    "submit_kwargs": {"num_gpus": 1}
-  }'
-```
-
 ---
 
-## API Endpoints
+## Docker Container Management
 
-### POST /api/serve/start-sam
-Start SAM deployment with GPU reservation.
+### Stop SAM (Free GPU)
 
-### POST /api/serve/stop-sam
-Stop SAM and free GPU for training.
+```bash
+docker stop sam-service
+```
 
-### GET /api/serve/sam/status
-Check if SAM is running and responsive.
+### Restart SAM
 
-### GET /api/serve/sam/info
-Get SAM specs, resource requirements, and usage strategy.
+```bash
+docker start sam-service
+```
+
+### Remove SAM (Complete Cleanup)
+
+```bash
+docker rm -f sam-service
+docker rmi onyx/sam:latest
+```
+
+### View Logs
+
+```bash
+docker logs -f sam-service
+```
 
 ---
 
@@ -138,7 +139,8 @@ Get SAM specs, resource requirements, and usage strategy.
 
 | Metric | Value |
 |--------|-------|
-| Model load time | ~2-3 seconds (first time) |
+| Container startup time | ~30s (includes pip install first time) |
+| Model load time | ~2-3 seconds |
 | Inference latency | 500-1000ms per prediction |
 | Max batch size | 1 (single image) |
 | Memory peak | ~10-11 GB during inference |
@@ -146,59 +148,18 @@ Get SAM specs, resource requirements, and usage strategy.
 
 ---
 
-## Resource Allocation Summary
-
-```
-Scenario 1: Annotations Only
-┌─────────────────────┐
-│ GPU 1: SAM running  │
-│ Training: BLOCKED   │
-└─────────────────────┘
-
-Scenario 2: After stopping SAM
-┌─────────────────────┐
-│ GPU 1: Training     │
-│ Annotations: N/A    │
-└─────────────────────┘
-
-Scenario 3: After training finishes
-┌─────────────────────┐
-│ GPU 1: Available    │
-│ Can restart SAM     │
-└─────────────────────┘
-```
-
----
-
-## Troubleshooting
-
-### SAM not responding after start-sam
-- Check job status: `curl http://10.0.0.44:9469/api/jobs/{job_id}`
-- Check OnyxCortex connectivity: `curl http://10.0.0.44:9469/api/nodes`
-- Verify model file exists: `ssh onyx@10.0.0.26 ls ~/sam-gpu/`
-
-### Training job stuck in PENDING while SAM is running
-- **This is expected!** SAM has num_gpus=1 reserved
-- Stop SAM: `curl -X POST http://10.0.0.44:9469/api/serve/stop-sam`
-- Training will start immediately after SAM stops
-
-### OnyxPoint GPU incompatibility
-- T1000 has 8GB, SAM needs ~10GB → guaranteed OOM
-- OnyxPoint cannot run SAM vit_b
-- Use OnyxCortex only
-
----
-
 ## Integration with CVAT
 
-CVAT Smart Tool can call SAM endpoint directly after start-sam:
+CVAT Smart Tool can call SAM endpoint after container starts:
 
 ```python
-# CVAT annotation plugin example
+# CVAT annotation plugin
 def get_mask_from_sam(image_base64, points_positive, points_negative):
     import requests
+    
+    # Use ml-compute proxy
     response = requests.post(
-        "http://10.0.0.44:9470/api/interact",
+        "http://10.0.0.44:9469/api/serve/sam/interact",
         json={
             "image": image_base64,
             "positive_points": points_positive,
@@ -206,9 +167,64 @@ def get_mask_from_sam(image_base64, points_positive, points_negative):
         },
         timeout=5
     )
+    
     if response.status_code == 200:
-        mask_base64 = response.json()["mask"]
-        return mask_base64
+        return response.json()["mask"]
     else:
-        raise RuntimeError("SAM not responding - start it with POST /api/serve/start-sam")
+        raise RuntimeError("SAM not available")
 ```
+
+---
+
+## Troubleshooting
+
+### SAM container won't start
+
+```bash
+# Check logs
+docker logs sam-service
+
+# Verify GPU access
+docker exec sam-service nvidia-smi
+
+# Rebuild from scratch
+docker rm -f sam-service
+bash docker/build_and_run_sam.sh
+```
+
+### ml-compute proxy returns "unhealthy"
+
+```bash
+# Verify OnyxCortex is accessible
+curl http://10.0.0.26:9470/health
+
+# Check ml-compute logs
+docker logs ml-compute
+```
+
+### Training job still PENDING while SAM runs
+
+**This is expected!** SAM has exclusive GPU access. Stop SAM first:
+
+```bash
+docker stop sam-service
+# Training will start immediately
+```
+
+---
+
+## Architecture
+
+```
+CVAT / User Interface
+        ↓
+ml-compute (OnyxSoma:9469)
+    ↓ proxy request
+SAM Docker Service (OnyxCortex:9470)
+    ↓ forward
+SAM Model (PyTorch, GPU)
+```
+
+- **ml-compute**: Central orchestrator with SAM proxy routes
+- **SAM Docker**: Lightweight service on GPU machine
+- **GPU isolation**: Docker + NVIDIA runtime ensures exclusive GPU access

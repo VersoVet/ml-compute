@@ -456,75 +456,35 @@ curl -X POST http://10.0.0.44:9469/api/jobs \
 
 Voir `jobs/bone-ml/README.md` pour docs complètes, guide des encodeurs, et exemple pipeline complet.
 
-### SAM (Segment Anything Model) - Lifecycle Management
+### SAM (Segment Anything Model) - Docker Service + Proxy
 
-Déploie Segment Anything Model (vit_b) via Ray Serve pour l'annotation assistée avec CVAT.
+Déploie Segment Anything Model (vit_b) en tant que service Docker sur OnyxCortex avec proxy via ml-compute.
 
 **⚠️ CRITICAL: GPU Resource Management**
-- OnyxCortex a 1 GPU (RTX 4070 SUPER)
-- SAM réserve `num_gpus=1` → GPU complètement utilisé
-- Les jobs de training sont BLOQUÉS tant que SAM est actif
+- OnyxCortex a 1 GPU (RTX 4070 SUPER, 12GB VRAM)
+- SAM Docker container réserve le GPU exclusivement
+- Les jobs de training sont BLOQUÉS tant que SAM tourne
 - **Stratégie**: Start SAM → Annotate → Stop SAM → Launch training
 
-#### POST /api/serve/start-sam
-**Démarrer SAM pour les annotations**
+#### Deployment
+
+Construire et lancer SAM Docker sur OnyxCortex:
 
 ```bash
-curl -X POST http://10.0.0.44:9469/api/serve/start-sam
-```
+# SSH sur OnyxCortex (10.0.0.26)
+ssh onyx@10.0.0.26
 
-**Response** (202 Accepted):
-```json
-{
-  "status": "deployed",
-  "endpoint": "http://10.0.0.44:9470/api/interact",
-  "job_id": "raysubmit_abc123",
-  "message": "SAM deployed successfully, GPU reserved (num_gpus=1)"
-}
-```
+# Build et start le container
+cd /opt/onyx/skills/ml-compute
+bash docker/build_and_run_sam.sh
 
-#### POST http://10.0.0.44:9470/api/interact
-**Utiliser SAM pour la segmentation interactive**
-
-**Request** :
-```json
-{
-  "image": "base64_encoded_image_or_uint8_array",
-  "positive_points": [[x1, y1], [x2, y2]],
-  "negative_points": [[x3, y3]],
-  "prompt_labels": [1, 1, 0]
-}
-```
-
-**Response** :
-```json
-{
-  "mask": "base64_encoded_png_mask",
-  "area": 12345,
-  "status": "success",
-  "image_shape": [1080, 1920, 3]
-}
-```
-
-**Latence** : 500-1000ms par prédiction
-
-#### POST /api/serve/stop-sam
-**Arrêter SAM et libérer le GPU pour le training**
-
-```bash
-curl -X POST http://10.0.0.44:9469/api/serve/stop-sam
-```
-
-**Response** (200 OK):
-```json
-{
-  "status": "stopped",
-  "message": "SAM deployment stopped, GPU is now available for training"
-}
+# Vérifier que SAM est actif
+docker ps | grep sam-service
+curl http://10.0.0.26:9470/health
 ```
 
 #### GET /api/serve/sam/status
-**Vérifier l'état de SAM**
+**Vérifier l'état de SAM via proxy ml-compute**
 
 ```bash
 curl -X GET http://10.0.0.44:9469/api/serve/sam/status
@@ -533,26 +493,112 @@ curl -X GET http://10.0.0.44:9469/api/serve/sam/status
 **Response** (SAM running):
 ```json
 {
-  "status": "running",
-  "latency_ms": 450,
-  "endpoint": "http://10.0.0.44:9470/api/interact"
+  "status": "healthy",
+  "service": "sam-vit-b"
 }
 ```
 
+**Response** (SAM not running):
+```json
+{
+  "status": "unhealthy",
+  "error": "Connection refused"
+}
+```
+
+#### GET /api/serve/sam/ready
+**Vérifier la disponibilité de SAM**
+
+```bash
+curl -X GET http://10.0.0.44:9469/api/serve/sam/ready
+```
+
+**Response**:
+```json
+{
+  "status": "ready"
+}
+```
+
+#### POST /api/serve/sam/interact
+**Utiliser SAM pour la segmentation interactive**
+
+```bash
+curl -X POST http://10.0.0.44:9469/api/serve/sam/interact \
+  -H "Content-Type: application/json" \
+  -d '{
+    "image": "base64_encoded_image_or_array",
+    "positive_points": [[x1, y1], [x2, y2]],
+    "negative_points": [[x3, y3]]
+  }'
+```
+
+**Request**:
+```json
+{
+  "image": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==",
+  "positive_points": [[100, 100], [200, 200]],
+  "negative_points": [[150, 150]]
+}
+```
+
+**Response**:
+```json
+{
+  "mask": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJ...",
+  "area": 12345,
+  "status": "success",
+  "image_shape": [1080, 1920, 3]
+}
+```
+
+**Latence**: 500-1000ms par prédiction
+
 #### GET /api/serve/sam/info
-**Spécifications SAM et requirements**
+**Spécifications SAM et resource requirements**
 
 ```bash
 curl -X GET http://10.0.0.44:9469/api/serve/sam/info
 ```
 
-**Notes** :
-- Modèle : ~/sam-gpu/sam_vit_b_01ec64.pth (375MB model, 10GB VRAM requis)
-- OnyxCortex : RTX 4070 SUPER 12GB ✅ Approprié
+**Response**:
+```json
+{
+  "service": "SAM (Segment Anything Model)",
+  "model": "vit_b",
+  "backend": "Docker",
+  "host": "10.0.0.26",
+  "port": 9470,
+  "endpoint": "http://10.0.0.26:9470/api/interact",
+  "gpu_reserved": 1.0,
+  "vram_required_gb": 10,
+  "vram_available_onyxcortex_gb": 12,
+  "inference_latency_ms": "500-1000",
+  "status_endpoint": "http://10.0.0.26:9470/health"
+}
+```
+
+#### Stopping SAM
+
+```bash
+# Stop le container (libère le GPU)
+docker stop sam-service
+
+# Redémarrer
+docker start sam-service
+
+# Nettoyer complètement
+docker rm -f sam-service
+docker rmi onyx/sam:latest
+```
+
+**Notes**:
+- Modèle : ~/sam-gpu/sam_vit_b_01ec64.pth (375MB, 10GB VRAM requis)
+- OnyxCortex : RTX 4070 SUPER 12GB ✅ Optimal
 - OnyxPoint : T1000 8GB ❌ Insuffisant (CUDA OOM garanti)
 - Image max recommandée : 1024x1024
 
-Voir `jobs/sam/README.md` pour docs complètes et workflow complet.
+Voir `jobs/sam/README.md` pour docs complètes et workflow CVAT integration.
 
 ---
 

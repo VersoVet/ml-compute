@@ -26,6 +26,7 @@ from src.modules.jobs import routes as jobs_routes
 from src.modules.models import routes as models_routes
 from src.modules.nodes import routes as nodes_routes
 from src.modules.serve import routes as serve_routes
+from src.modules.serve_proxy import routes as serve_proxy_routes
 
 logger = logging.getLogger("ml-compute")
 
@@ -143,6 +144,7 @@ app = FastAPI(
 app.include_router(jobs_routes.router, prefix="/api/jobs", tags=["jobs"])
 app.include_router(nodes_routes.router, prefix="/api/nodes", tags=["nodes"])
 app.include_router(serve_routes.router, prefix="/api/serve", tags=["serve"])
+app.include_router(serve_proxy_routes.router, prefix="/api/serve", tags=["SAM"])
 app.include_router(models_routes.router, prefix="/api/models", tags=["models"])
 
 

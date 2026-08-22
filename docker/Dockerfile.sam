@@ -1,0 +1,39 @@
+FROM nvidia/cuda:12.1.1-runtime-ubuntu22.04
+
+WORKDIR /app
+
+# Install Python and SAM dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    python3.10 \
+    python3-pip \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# Set python alias
+RUN update-alternatives --install /usr/bin/python python /usr/bin/python3.10 1
+
+# Install SAM and dependencies
+RUN pip install --no-cache-dir \
+    torch \
+    torchvision \
+    segment-anything \
+    opencv-python \
+    Pillow \
+    fastapi \
+    uvicorn[standard] \
+    pydantic \
+    && rm -rf /root/.cache/pip
+
+# Copy SAM modules and server script
+COPY src/modules/sam/deployment.py /app/deployment.py
+COPY docker/sam_server.py /app/sam_server.py
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
+    CMD curl -f http://localhost:9470/health || exit 1
+
+# Expose port
+EXPOSE 9470
+
+# Run SAM service
+CMD ["python", "/app/sam_server.py"]
