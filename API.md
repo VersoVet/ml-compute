@@ -181,6 +181,178 @@ Résumé agrégé des ressources cluster (CPU, GPU, mémoire) avec utilisation %
 
 ---
 
+## Nomad Orchestration API
+
+### GET /api/nomad/status
+Récupère le statut global du cluster Nomad (nodes, GPUs, jobs).
+
+**Response**:
+```json
+{
+  "nodes_ready": 3,
+  "nodes_total": 3,
+  "gpus_total": 2,
+  "gpus_available": 2,
+  "jobs_running": 0,
+  "jobs_pending": 0
+}
+```
+
+**Description**:
+- `nodes_ready`: Nombre de nœuds prêts à recevoir des jobs
+- `gpus_total`: Total des GPUs dans le cluster (OnyxCortex + OnyxPoint)
+- `gpus_available`: GPUs libres pour allocation
+- `jobs_running`: Jobs en cours d'exécution
+- `jobs_pending`: Jobs en attente d'allocation
+
+---
+
+### POST /api/nomad/jobs/submit
+Soumet un job à Nomad avec reservation de ressources (CPU, RAM, GPU).
+
+**Request**:
+```json
+{
+  "name": "bone-ml-training-001",
+  "job_type": "batch",
+  "driver": "docker",
+  "image": "rayproject/ray:2.35.0-py312",
+  "command": "python /app/train_multitask.py",
+  "constraints": [
+    {
+      "task_name": "training",
+      "cpu_mhz": 8000,
+      "memory_mb": 16384,
+      "num_gpus": 1
+    }
+  ],
+  "env_vars": {
+    "EPOCHS": "100",
+    "BATCH_SIZE": "32",
+    "BONE_TYPE": "femur"
+  },
+  "volumes": {
+    "/mnt/ml-store": "/data/ml",
+    "/mnt/bonestore": "/data/bones"
+  },
+  "timeout_seconds": 7200
+}
+```
+
+**Response** (202 OK):
+```json
+{
+  "status": "submitted",
+  "job_id": "bone-ml-training-001",
+  "evaluation_id": "c0e1bdd3-8896-92fd-516c-d941c3011e76"
+}
+```
+
+**Champs**:
+- `name`: Identifiant unique du job (kebab-case)
+- `job_type`: Type de job (`batch` = one-time, `service` = long-running)
+- `driver`: Driver d'exécution (`docker`, `raw_exec`, `exec`)
+- `image`: Image Docker (pour driver docker)
+- `command`: Commande à exécuter
+- `constraints`: Ressources requises (CPU MHz, RAM MB, num_gpus)
+- `env_vars`: Variables d'environnement pour le job
+- `volumes`: Montages NFS (source → destination)
+- `timeout_seconds`: Durée maximale du job
+
+**GPU Reservation**:
+- Si `num_gpus: 1` → Nomad alloue 1 GPU exclusif au job
+- Si SAM Docker utilise déjà une GPU → Job attend libération
+- GPU exclusive = pas de CUDA OOM conflict
+
+---
+
+### GET /api/nomad/jobs/{job_id}
+Récupère le statut et l'historique d'allocation d'un job.
+
+**Response**:
+```json
+{
+  "job_id": "bone-ml-training-001",
+  "status": "running",
+  "priority": 50,
+  "allocations": [
+    {
+      "allocation_id": "c7da9579-d226-3ce3-833c-3211e98c18d9",
+      "job_id": "bone-ml-training-001",
+      "task_name": "training-group",
+      "status": "running",
+      "node_id": "d4ef94c9-5613-6017-253f-018c4f02d5b0",
+      "node_name": "onyxcortex",
+      "cpu_used_mhz": 7200,
+      "memory_used_mb": 12800,
+      "uptime_seconds": 324
+    }
+  ],
+  "create_index": 41,
+  "modify_index": 45
+}
+```
+
+**Statuts possibles**:
+- `pending`: Job créé, en attente d'allocation
+- `running`: Job en exécution
+- `complete`: Job terminé avec succès
+- `dead`: Job arrêté ou échoué
+- `failed`: Job échoué avec erreur
+- `lost`: Allocation perdue
+
+---
+
+### POST /api/nomad/jobs/{job_id}/stop
+Arrête un job en cours d'exécution.
+
+**Response**:
+```json
+{
+  "status": "stopped",
+  "job_id": "bone-ml-training-001"
+}
+```
+
+---
+
+### GET /api/nomad/gpu-status
+Récupère l'état des GPUs par nœud (occupation, availability).
+
+**Response**:
+```json
+[
+  {
+    "node_id": "d4ef94c9-5613-6017-253f-018c4f02d5b0",
+    "node_name": "onyxcortex",
+    "num_gpus": 1,
+    "available_gpus": 0,
+    "in_use": ["bone-ml-001"]
+  },
+  {
+    "node_id": "924e46c2-c342-e2d6-869b-d374aae530aa",
+    "node_name": "OnyxPoint",
+    "num_gpus": 1,
+    "available_gpus": 1,
+    "in_use": []
+  },
+  {
+    "node_id": "08af0f22-8fd5-11b4-59ea-7b59cd84aa4e",
+    "node_name": "onyxglia",
+    "num_gpus": 0,
+    "available_gpus": 0,
+    "in_use": []
+  }
+]
+```
+
+**Utilisé pour**:
+- Vérifier disponibilité GPU avant soumettre job
+- Déboguer GPU allocation conflicts
+- Monitorer saturation GPU
+
+---
+
 ## Serve API
 
 ### GET /api/serve/deployments
