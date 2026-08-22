@@ -146,6 +146,32 @@ ml-compute/
 └── requirements.txt            # Dépendances Python
 ```
 
+## Monitoring Stack
+
+**Prometheus + Grafana** pour monitoring du cluster Ray (voir `monitoring/README.md`).
+
+```
+OnyxSoma (10.0.0.44)
+├── Prometheus (:9090)
+│   └── Scrapes: node-exporter (9100), gpu-exporter (9445), Ray Dashboard (8265)
+└── Grafana (:3000)
+    └── Visualizes Prometheus metrics + Ray cluster health
+    
+ML Workers
+├── OnyxCortex (10.0.0.26)
+│   ├── Node Exporter (:9100) — CPU, Memory, Disk, Network
+│   └── NVIDIA GPU Exporter (:9445) — GPU util, memory, temperature
+├── Glia (10.0.0.8)
+│   └── Node Exporter (:9100) — CPU, Memory, Disk, Network
+└── OnyxPoint (10.0.0.86)
+    ├── Node Exporter (:9100) — CPU, Memory, Disk, Network
+    └── NVIDIA GPU Exporter (:9445) — GPU util, memory, temperature
+```
+
+**Accès** :
+- Prometheus: `http://10.0.0.44:9090`
+- Grafana: `http://10.0.0.44:3000` (admin/admin)
+
 ## Dépendances
 
 | Package | Version | Usage |

@@ -100,6 +100,21 @@
 
 ## Phase 9: Cluster Expansion & Architecture Clarification (DONE)
 
+## Phase 10: Monitoring Infrastructure (IN PROGRESS)
+
+- [ ] Installer Prometheus + Grafana stack
+  - [x] Configuration Prometheus (prometheus.yml)
+  - [x] Docker Compose stack (Prometheus + Grafana)
+  - [x] Grafana data source provisioning
+  - [x] Documentation SETUP.md + README.md
+  - [ ] Déployer sur OnyxSoma
+  - [ ] Installer Node Exporter sur tous les workers
+  - [ ] Installer NVIDIA GPU Exporter sur workers GPU
+  - [ ] Créer dashboards Grafana personnalisés
+  - [ ] Configurer alertes Prometheus
+
+## Phase 9: Cluster Expansion & Architecture Clarification (DONE)
+
 - [x] Ajouter OnyxCortex (10.0.0.26) au cluster Ray
   - [x] Ray worker container lancé avec ray:2.35.0-py312
   - [x] GPU NVIDIA RTX 4070 SUPER (12GB VRAM) connectée
