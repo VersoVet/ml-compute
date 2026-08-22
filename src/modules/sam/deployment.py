@@ -74,6 +74,7 @@ class SAMDeployment:
             if isinstance(image_data, str):
                 # base64 string
                 import base64
+
                 image_bytes = base64.b64decode(image_data)
                 image = np.array(Image.open(io.BytesIO(image_bytes)))
             else:
@@ -124,6 +125,7 @@ class SAMDeployment:
 
             # Encode mask as base64
             import base64
+
             mask_uint8 = (mask * 255).astype(np.uint8)
             _, encoded = cv2.imencode(".png", mask_uint8)
             mask_base64 = base64.b64encode(encoded).decode("utf-8")
@@ -141,7 +143,6 @@ class SAMDeployment:
 
     async def __call__(self, request):
         """HTTP handler for Ray Serve."""
-        import json
         from starlette.responses import JSONResponse
 
         if request.method == "POST":

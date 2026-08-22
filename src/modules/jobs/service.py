@@ -93,9 +93,7 @@ async def get_job_status(job_id: str) -> dict[str, Any]:
         raise RuntimeError(f"Failed to get job status: {e}")
 
 
-async def list_jobs(
-    status: str | None = None, limit: int = 100
-) -> dict[str, Any]:
+async def list_jobs(status: str | None = None, limit: int = 100) -> dict[str, Any]:
     """List jobs from Ray cluster.
 
     Args:

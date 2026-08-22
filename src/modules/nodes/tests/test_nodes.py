@@ -28,8 +28,7 @@ def _mock_response(json_data: dict, status_code: int = 200) -> MagicMock:
     return resp
 
 
-def _make_mock_client(response: MagicMock | None = None,
-                      side_effect: Exception | None = None) -> AsyncMock:
+def _make_mock_client(response: MagicMock | None = None, side_effect: Exception | None = None) -> AsyncMock:
     """Build a mock httpx.AsyncClient with async context manager support.
 
     Args:
@@ -74,9 +73,7 @@ RAY_NODES_RESPONSE = {
     }
 }
 
-EMPTY_NODES_RESPONSE: dict = {
-    "data": {"result": {"result": []}}
-}
+EMPTY_NODES_RESPONSE: dict = {"data": {"result": {"result": []}}}
 
 
 # ---------------------------------------------------------------------------

@@ -2,11 +2,17 @@ FROM nvidia/cuda:12.1.1-runtime-ubuntu22.04
 
 WORKDIR /app
 
-# Install Python and SAM dependencies
+# Install Python and system dependencies for OpenCV/GUI
 RUN apt-get update && apt-get install -y --no-install-recommends \
     python3.10 \
     python3-pip \
     curl \
+    libxcb1 \
+    libxext6 \
+    libx11-6 \
+    libsm6 \
+    libxrender1 \
+    libgomp1 \
     && rm -rf /var/lib/apt/lists/*
 
 # Set python alias

@@ -6,7 +6,7 @@ from typing import Any
 from fastapi import APIRouter
 from pydantic import BaseModel
 
-from .service import sam_health, sam_ready, sam_interact, sam_info
+from .service import sam_health, sam_info, sam_interact, sam_ready
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["SAM"])

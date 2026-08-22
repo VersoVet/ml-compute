@@ -41,13 +41,15 @@ async def list_deployments() -> dict[str, Any]:
 
             for deploy_name, deploy_info in app_deployments.items():
                 replicas = len(deploy_info.get("replica_states", {}).get("RUNNING", []))
-                deployments.append({
-                    "name": deploy_name,
-                    "application": app_name,
-                    "status": deploy_info.get("status", app_status),
-                    "replicas": replicas,
-                    "endpoint": f"{RAY_SERVE_URL}/{app_name}",
-                })
+                deployments.append(
+                    {
+                        "name": deploy_name,
+                        "application": app_name,
+                        "status": deploy_info.get("status", app_status),
+                        "replicas": replicas,
+                        "endpoint": f"{RAY_SERVE_URL}/{app_name}",
+                    }
+                )
 
         return {
             "deployments": deployments,
@@ -118,10 +120,7 @@ async def deploy_model(
     """
     import_path = _resolve_import_path(model_type)
     if not import_path:
-        raise RuntimeError(
-            f"Unsupported model type: {model_type}. "
-            "Supported: yolo, efficientnet, vllm, custom"
-        )
+        raise RuntimeError(f"Unsupported model type: {model_type}. Supported: yolo, efficientnet, vllm, custom")
 
     deployment_config: dict[str, Any] = {"num_replicas": num_replicas}
 
@@ -133,9 +132,7 @@ async def deploy_model(
     if model_path:
         init_args["model_path"] = model_path
     if model_type == "vllm":
-        init_args["gpu_memory_utilization"] = kwargs.get(
-            "gpu_memory_utilization", 0.7
-        )
+        init_args["gpu_memory_utilization"] = kwargs.get("gpu_memory_utilization", 0.7)
 
     app_config: dict[str, Any] = {
         "applications": [

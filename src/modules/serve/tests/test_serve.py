@@ -10,6 +10,7 @@ from src.modules.serve import service
 # Fixtures / helpers
 # ---------------------------------------------------------------------------
 
+
 def _mock_response(json_data: dict, status_code: int = 200) -> MagicMock:
     """Build a fake httpx.Response."""
     resp = MagicMock()
@@ -18,8 +19,11 @@ def _mock_response(json_data: dict, status_code: int = 200) -> MagicMock:
     resp.raise_for_status = MagicMock()
     if status_code >= 400:
         import httpx
+
         resp.raise_for_status.side_effect = httpx.HTTPStatusError(
-            "error", request=MagicMock(), response=resp,
+            "error",
+            request=MagicMock(),
+            response=resp,
         )
         resp.text = str(json_data)
     return resp
@@ -54,6 +58,7 @@ EMPTY_APPLICATIONS = {"applications": {}}
 # ---------------------------------------------------------------------------
 # service.list_deployments
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.asyncio
 async def test_list_deployments_returns_parsed_apps() -> None:
@@ -115,6 +120,7 @@ async def test_list_deployments_connect_error() -> None:
 # service.get_serve_status
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.asyncio
 async def test_get_serve_status_running() -> None:
     """get_serve_status returns app count and status."""
@@ -154,6 +160,7 @@ async def test_get_serve_status_not_started() -> None:
 # ---------------------------------------------------------------------------
 # service.deploy_model
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.asyncio
 async def test_deploy_model_success() -> None:
@@ -235,6 +242,7 @@ async def test_deploy_model_ray_rejects() -> None:
 # service.undeploy_model
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.asyncio
 async def test_undeploy_model_success() -> None:
     """undeploy_model sends DELETE and returns status."""
@@ -273,6 +281,7 @@ async def test_undeploy_model_not_found() -> None:
 # ---------------------------------------------------------------------------
 # _resolve_import_path
 # ---------------------------------------------------------------------------
+
 
 def test_resolve_import_path_known_types() -> None:
     """_resolve_import_path returns paths for known model types."""

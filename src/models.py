@@ -18,9 +18,7 @@ class ReadyResponse(BaseModel):
     """Readiness check response."""
 
     status: str = Field(..., description="Ready status: ready/not_ready")
-    dependencies: dict[str, str] = Field(
-        default_factory=dict, description="Dependency status"
-    )
+    dependencies: dict[str, str] = Field(default_factory=dict, description="Dependency status")
 
 
 class JobSubmitRequest(BaseModel):
@@ -28,12 +26,8 @@ class JobSubmitRequest(BaseModel):
 
     name: str = Field(..., description="Job name")
     entrypoint: str = Field(..., description="Command to run")
-    runtime_env: dict[str, Any] = Field(
-        default_factory=dict, description="Ray runtime environment"
-    )
-    submit_kwargs: dict[str, Any] = Field(
-        default_factory=dict, description="Ray job submission parameters"
-    )
+    runtime_env: dict[str, Any] = Field(default_factory=dict, description="Ray runtime environment")
+    submit_kwargs: dict[str, Any] = Field(default_factory=dict, description="Ray job submission parameters")
 
 
 class JobResponse(BaseModel):

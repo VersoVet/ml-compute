@@ -22,9 +22,7 @@ async def get_cluster_nodes() -> dict[str, Any]:
     """
     try:
         async with httpx.AsyncClient() as client:
-            r = await client.get(
-                f"{RAY_DASHBOARD_URL}/api/v0/nodes", timeout=10.0
-            )
+            r = await client.get(f"{RAY_DASHBOARD_URL}/api/v0/nodes", timeout=10.0)
             r.raise_for_status()
             data = r.json()
 
@@ -99,21 +97,9 @@ async def get_resource_summary() -> dict[str, Any]:
                 "memory_bytes": available_memory,
             },
             "utilization": {
-                "cpu_percent": (
-                    100 * (total_cpu - available_cpu) / total_cpu
-                    if total_cpu > 0
-                    else 0
-                ),
-                "gpu_percent": (
-                    100 * (total_gpu - available_gpu) / total_gpu
-                    if total_gpu > 0
-                    else 0
-                ),
-                "memory_percent": (
-                    100 * (total_memory - available_memory) / total_memory
-                    if total_memory > 0
-                    else 0
-                ),
+                "cpu_percent": (100 * (total_cpu - available_cpu) / total_cpu if total_cpu > 0 else 0),
+                "gpu_percent": (100 * (total_gpu - available_gpu) / total_gpu if total_gpu > 0 else 0),
+                "memory_percent": (100 * (total_memory - available_memory) / total_memory if total_memory > 0 else 0),
             },
         }
     except Exception as e:

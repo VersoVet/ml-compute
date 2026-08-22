@@ -40,17 +40,13 @@ class RayClient:
         Args:
             dashboard_url: Ray Dashboard URL. Defaults to http://localhost:8265.
         """
-        self.dashboard_url = dashboard_url or os.environ.get(
-            "RAY_DASHBOARD_URL", "http://localhost:8265"
-        )
+        self.dashboard_url = dashboard_url or os.environ.get("RAY_DASHBOARD_URL", "http://localhost:8265")
 
     async def connect(self) -> None:
         """Verify Ray dashboard is accessible."""
         try:
             async with httpx.AsyncClient() as client:
-                r = await client.get(
-                    f"{self.dashboard_url}/api/v0/nodes", timeout=10.0
-                )
+                r = await client.get(f"{self.dashboard_url}/api/v0/nodes", timeout=10.0)
                 r.raise_for_status()
             logger.info(f"Connected to Ray dashboard at {self.dashboard_url}")
         except Exception as e:
@@ -69,9 +65,7 @@ class RayClient:
         """
         try:
             async with httpx.AsyncClient() as client:
-                r = await client.get(
-                    f"{self.dashboard_url}/api/v0/nodes", timeout=5.0
-                )
+                r = await client.get(f"{self.dashboard_url}/api/v0/nodes", timeout=5.0)
                 r.raise_for_status()
                 data = r.json()
 
@@ -113,6 +107,7 @@ async def lifespan(app: FastAPI):
         onyx.start()
         # Pass client to modules for status publishing
         from src.modules.jobs import routes as jobs_routes
+
         jobs_routes.set_onyx(onyx)
         logger.info("OnyxClient initialized")
     except Exception as e:
@@ -192,11 +187,7 @@ async def ready() -> ReadyResponse:
             logger.debug(f"Failed to signal WORKING during readiness check: {e}")
 
     cluster_health = await ray_client.health_check()
-    dependencies = {
-        "ray_cluster": "ready"
-        if cluster_health["status"] == "healthy"
-        else "not_ready"
-    }
+    dependencies = {"ray_cluster": "ready" if cluster_health["status"] == "healthy" else "not_ready"}
 
     return ReadyResponse(
         status="ready" if all(v == "ready" for v in dependencies.values()) else "not_ready",
