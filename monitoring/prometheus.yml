@@ -1,0 +1,78 @@
+# Prometheus Configuration for ml-compute Cluster Monitoring
+# Monitors: OnyxSoma (head), OnyxCortex (GPU), Glia (CPU), OnyxPoint (legacy)
+
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  external_labels:
+    cluster: 'ml-compute'
+    environment: 'production'
+
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets: []
+
+rule_files: []
+
+scrape_configs:
+  # Ray Head Node (OnyxSoma) - Orchestration
+  - job_name: 'ray-head'
+    static_configs:
+      - targets: ['10.0.0.44:8265']
+    scrape_interval: 30s
+    metrics_path: '/metrics'
+
+  # Node Exporter - OnyxSoma (Head/Admin)
+  - job_name: 'node-exporter-soma'
+    static_configs:
+      - targets: ['10.0.0.44:9100']
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: instance
+        replacement: 'OnyxSoma'
+
+  # Node Exporter - OnyxCortex (GPU Worker)
+  - job_name: 'node-exporter-cortex'
+    static_configs:
+      - targets: ['10.0.0.26:9100']
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: instance
+        replacement: 'OnyxCortex'
+
+  # GPU Exporter - OnyxCortex (RTX 4070 SUPER)
+  - job_name: 'nvidia-gpu-cortex'
+    static_configs:
+      - targets: ['10.0.0.26:9445']
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: instance
+        replacement: 'OnyxCortex-GPU'
+
+  # Node Exporter - Glia (CPU Worker)
+  - job_name: 'node-exporter-glia'
+    static_configs:
+      - targets: ['10.0.0.8:9100']
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: instance
+        replacement: 'Glia'
+
+  # Node Exporter - OnyxPoint (Legacy/Archive Worker)
+  - job_name: 'node-exporter-onyxpoint'
+    static_configs:
+      - targets: ['10.0.0.86:9100']
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: instance
+        replacement: 'OnyxPoint'
+
+  # GPU Exporter - OnyxPoint (T1000 8GB)
+  - job_name: 'nvidia-gpu-onyxpoint'
+    static_configs:
+      - targets: ['10.0.0.86:9445']
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: instance
+        replacement: 'OnyxPoint-GPU'
