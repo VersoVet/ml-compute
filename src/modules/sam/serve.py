@@ -55,12 +55,12 @@ class SAMServeManager:
                 response.raise_for_status()
                 data = response.json()
 
-            self.is_deployed = data.get("status") == "ok"
+            self.is_deployed = data.get("status") in ("ok", "ready")
             if self.is_deployed:
                 logger.info("✓ SAM Docker backend is healthy on OnyxCortex:9470")
                 return True
             else:
-                logger.warning("SAM Docker backend responding but unhealthy")
+                logger.warning(f"SAM Docker backend responding but unhealthy: {data.get('status')}")
                 return False
 
         except Exception as e:
