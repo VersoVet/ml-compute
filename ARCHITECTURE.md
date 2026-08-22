@@ -2,26 +2,33 @@
 
 ## Vue d'ensemble
 
-**ml-compute** est un orchestrateur ML centralisé basé sur Ray, déployé sur **OnyxSoma** comme Ray head node. Il fournit une API FastAPI pour soumettre des jobs training/inférence, monitorer les workers GPU/CPU distants, et servir des modèles via Ray Serve.
+**ml-compute** est un orchestrateur ML centralisé basé sur Ray. Le **Ray Head** est déployé sur **OnyxSoma** (machine d'administration système), qui fournit une API FastAPI pour soumettre des jobs training/inférence aux workers ML distants (OnyxCortex GPU, Glia CPU), monitorer les ressources, et servir des modèles via Ray Serve.
 
 ## Architecture Cluster Ray
 
 ```
-OnyxSoma (10.0.0.44:9469) — Head Node
+OnyxSoma (10.0.0.44) — Administration & Ray Head (Orchestration Only)
 ├── FastAPI wrapper (:9469)
-├── Ray Head (:6379, GCS)
+├── Ray Head Node (:6380 GCS)
 ├── Ray Dashboard (:8265)
 └── Ray Serve (:8000)
 
-Workers distants (Docker rayproject/ray:2.35.0-py312, --network host)
-├── OnyxPoint (10.0.0.86)
-│   └── GPU Worker (i5-10400, NVIDIA T1000 8GB, num_cpus=10, num_gpus=1, 23GB RAM)
-├── OnyxCortex (10.0.0.26) — NEW
-│   └── GPU Worker (16-core i7-10700KF @ 3.8GHz, RTX 4070 SUPER 12GB, num_cpus=16, num_gpus=1, 46GB RAM, shm-size=10GB)
-├── Glia (10.0.0.8)
-│   └── CPU Worker (2x Xeon E5-2630, num_cpus=20, 47GB RAM, --shm-size=20g)
-└── Axon (10.0.0.21)
-    └── CPU Worker (num_cpus=4, Grobid tasks) — non connecté
+ML Workers (Docker rayproject/ray:2.35.0-py312, --network host)
+├── OnyxCortex (10.0.0.26) — GPU Training ⚡
+│   └── 16-core i7-10700KF @ 3.8GHz, RTX 4070 SUPER 12GB, num_cpus=16, num_gpus=1, 46GB RAM, shm-size=10GB
+│       ├─ bone-ml multitask training (Swin-T @1340×1340)
+│       └─ GPU jobs preferred
+└── Glia (10.0.0.8) — CPU Training
+    └── 2x Xeon E5-2630, num_cpus=20, 47GB RAM, --shm-size=20g
+        ├─ CPU-bound jobs
+        └─ Fallback for GPU jobs if Cortex busy
+
+Infrastructure Services (Not in Ray cluster)
+├── Axon (10.0.0.21)
+│   ├── Grobid (PDF extraction)
+│   └── Ollama (Embedding models for bibliography)
+└── OnyxPoint (10.0.0.86) — Legacy/Archive
+    └── i5-10400, NVIDIA T1000 8GB (available if needed)
 ```
 
 ## Modules

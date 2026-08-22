@@ -98,12 +98,19 @@
   - [x] Déployer avec /forge-deploy (v0.1.40)
   - [x] Tester soumission via /api/jobs (successful submission)
 
-## Phase 9: Cluster Expansion (DONE)
+## Phase 9: Cluster Expansion & Architecture Clarification (DONE)
 
 - [x] Ajouter OnyxCortex (10.0.0.26) au cluster Ray
   - [x] Ray worker container lancé avec ray:2.35.0-py312
   - [x] GPU NVIDIA RTX 4070 SUPER (12GB VRAM) connectée
   - [x] 16 CPU cores + 46GB RAM détectés par Ray
-  - [x] Mise à jour ARCHITECTURE.md avec specs OnyxCortex
-  - [x] Mise à jour DIAGRAM.md avec nouveau worker dans cluster
   - [x] Prêt pour bone-ml training (Swin-T @1340×1340, batch=4)
+
+- [x] Clarifier rôles des machines dans l'architecture
+  - [x] OnyxSoma: Administration + Ray Head (orchestration only)
+  - [x] OnyxCortex: ML GPU worker (primary training)
+  - [x] Glia: ML CPU worker (fallback + CPU jobs)
+  - [x] Axon: Infrastructure services (Grobid, Ollama embedding)
+  - [x] OnyxPoint: Legacy/archive (available if needed)
+  - [x] Mise à jour ARCHITECTURE.md avec clarification
+  - [x] Mise à jour DIAGRAM.md avec separation nette

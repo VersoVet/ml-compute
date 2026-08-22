@@ -4,23 +4,24 @@
 
 ```mermaid
 graph TB
-    subgraph Soma["OnyxSoma (10.0.0.44)"]
+    subgraph Soma["OnyxSoma (10.0.0.44) — Administration"]
         API["FastAPI Wrapper<br/>:9469<br/>OnyxClient"]
-        RayHead["Ray Head Node<br/>:6380 GCS<br/>:8265 Dashboard<br/>:8000 Serve<br/>ray:2.35.0-py312"]
+        RayHead["Ray Head Node<br/>:6380 GCS<br/>:8265 Dashboard<br/>:8000 Serve<br/>Orchestration Only"]
         API ---|Ray Client| RayHead
     end
 
-    subgraph Workers["Workers (External)"]
-        OP["OnyxPoint (10.0.0.86)<br/>i5-10400, T1000 8GB<br/>num_cpus=10, num_gpus=1, 23GB RAM<br/>Docker ray:2.35.0-py312 --gpus all"]
-        Cortex["OnyxCortex (10.0.0.26) ⚡<br/>i7-10700KF 16-core @ 3.8GHz, RTX 4070 SUPER 12GB<br/>num_cpus=16, num_gpus=1, 46GB RAM<br/>Docker ray:2.35.0-py312 --shm-size=10gb"]
-        Glia["Glia (10.0.0.8)<br/>2x Xeon E5-2630<br/>num_cpus=20, 47GB RAM<br/>Docker ray:2.35.0-py312 --shm-size=20g"]
-        Axon["Axon (10.0.0.21)<br/>CPU Worker<br/>num_cpus=4<br/>Non connecté"]
+    subgraph MLWorkers["ML Workers (Ray Cluster)"]
+        Cortex["OnyxCortex (10.0.0.26) ⚡<br/>GPU: i7-10700KF 16-core<br/>RTX 4070 SUPER 12GB VRAM<br/>46GB RAM, shm-size=10GB<br/>num_cpus=16, num_gpus=1<br/>→ bone-ml training (Swin-T)"]
+        Glia["Glia (10.0.0.8)<br/>CPU: 2x Xeon E5-2630<br/>num_cpus=20, 47GB RAM<br/>shm-size=20GB<br/>→ CPU jobs + fallback"]
     end
 
-    RayHead -->|ray start --address| OP
-    RayHead -->|ray start --address| Cortex
-    RayHead -->|ray start --address| Glia
-    RayHead -->|ray start --address| Axon
+    subgraph Infrastructure["Infrastructure Services"]
+        Axon["Axon (10.0.0.21)<br/>Grobid (PDF extraction)<br/>Ollama (Embeddings)"]
+        OP["OnyxPoint (10.0.0.86)<br/>Legacy/Archive<br/>i5-10400, T1000 8GB"]
+    end
+
+    RayHead -->|ray start --address:6380| Cortex
+    RayHead -->|ray start --address:6380| Glia
 
     subgraph Client["Clients"]
         Portal["Onyx Portal<br/>(Dashboard)"]
