@@ -2,34 +2,112 @@
 
 ## Vue d'ensemble
 
-**ml-compute** est un orchestrateur ML centralisé basé sur Ray. Le **Ray Head** est déployé sur **OnyxSoma** (machine d'administration système), qui fournit une API FastAPI pour soumettre des jobs training/inférence aux workers ML distants (OnyxCortex GPU, Glia CPU), monitorer les ressources, et servir des modèles via Ray Serve.
+**ml-compute** est un **orchestrateur ML centralisé basé sur Ray**. Le cluster déploie les jobs training sur des workers ML distants (GPU/CPU) et fournit une API FastAPI pour soumettre/monitorer les tâches.
+
+**Architecture en 3 niveaux:**
+1. **Ray Cluster** — Orchestration & API (OnyxSoma head + workers)
+2. **Skills** — Services métier (bone-ml, bone-annotator sur OnyxSynapse)
+3. **Infrastructure** — Services transversaux (Axon embeddings, monitoring Prometheus/Grafana)
+
+---
 
 ## Architecture Cluster Ray
 
+### Ray Head Node (Administration)
 ```
-OnyxSoma (10.0.0.44) — Administration & Ray Head (Orchestration Only)
-├── FastAPI wrapper (:9469)
-├── Ray Head Node (:6380 GCS)
-├── Ray Dashboard (:8265)
-└── Ray Serve (:8000)
-
-ML Workers (Docker rayproject/ray:2.35.0-py312, --network host)
-├── OnyxCortex (10.0.0.26) — GPU Training ⚡
-│   └── 16-core i7-10700KF @ 3.8GHz, RTX 4070 SUPER 12GB, num_cpus=16, num_gpus=1, 46GB RAM, shm-size=10GB
-│       ├─ bone-ml multitask training (Swin-T @1340×1340)
-│       └─ GPU jobs preferred
-└── Glia (10.0.0.8) — CPU Training
-    └── 2x Xeon E5-2630, num_cpus=20, 47GB RAM, --shm-size=20g
-        ├─ CPU-bound jobs
-        └─ Fallback for GPU jobs if Cortex busy
-
-Infrastructure Services (Not in Ray cluster)
-├── Axon (10.0.0.21)
-│   ├── Grobid (PDF extraction)
-│   └── Ollama (Embedding models for bibliography)
-└── OnyxPoint (10.0.0.86) — Legacy/Archive
-    └── i5-10400, NVIDIA T1000 8GB (available if needed)
+OnyxSoma (10.0.0.44) — Ray Head Node + ml-compute API
+├── FastAPI wrapper (:9469)          ← Soumettre jobs ML
+├── Ray Head/GCS (:6380)             ← Orchestration
+├── Ray Dashboard (:8265)            ← Visualisation cluster
+└── Ray Serve (:8000)                ← Inference deployments
 ```
+
+**Rôle**: Administration UNIQUEMENT — pas d'exécution de jobs training ici.
+
+### Ray Workers (Exécution training)
+```
+ML Workers (Docker rayproject/ray:2.35.0-py312, volumes NFS)
+├── OnyxCortex (10.0.0.26) — GPU Training ⚡⚡ (PRINCIPAL)
+│   └── Hardware: 16-core i7-10700KF, RTX 4070 SUPER 12GB, 46GB RAM
+│       Config: num_cpus=16, num_gpus=1, shm-size=10GB
+│       Usage: Bone-ml Dual-Head U-Net training (GPU-bound)
+│
+├── Glia (10.0.0.8) — CPU Training ⚡ (FALLBACK)
+│   └── Hardware: 2x Xeon E5-2630, 20 cores, 47GB RAM
+│       Config: num_cpus=20, num_gpus=0, shm-size=20GB
+│       Usage: CPU-only jobs, fallback if Cortex busy
+│
+└── OnyxPoint (10.0.0.86) — GPU Training (OPTIONNEL)
+    └── Hardware: i5-10400, NVIDIA T1000 8GB, 23GB RAM
+        Config: num_cpus=10, num_gpus=1, shm-size=8GB
+        Usage: Secondary GPU, inference, legacy workloads
+```
+
+**Tous les workers accèdent aux NFS volumes**:
+- `/mnt/ml-store` → datasets, models, runs (10.0.0.6:/srv/nas/ml)
+- `/mnt/bonestore` → images fluoroscopiques (10.0.0.52:/srv/bones)
+
+**Installation d'un nouveau worker**: Voir [INSTALLATION.md](./INSTALLATION.md#1-ray-worker-setup)
+
+---
+
+### Infrastructure Services (Hors Ray Cluster)
+```
+OnyxSynapse (10.0.0.59) — Bone Skills Hub
+├── bone-ml (:9463)          ← Training orchestration
+├── bone-annotator (:9464)   ← Annotation API
+├── PostgreSQL (:5432)       ← Annotations + labels
+├── Qdrant (:6333)          ← Vector search
+└── CVAT                     ← Labeling interface
+
+Axon (10.0.0.?) — Embeddings & Bibliography
+├── Ollama axon (:11434)     ← Local embeddings (Qdrant)
+└── Bibliography             ← Papers, articles indexing
+
+Monitoring Infrastructure
+├── Prometheus (:9090) — Metrics collection (OnyxSoma)
+└── Grafana (:3000) — Visualisation (OnyxSoma)
+    └── Scrapes: Node Exporter, GPU Exporter, Ray Dashboard
+```
+
+**Ces services ne font PAS partie du Ray cluster** — ils communiquent via API HTTP avec les Ray jobs.
+
+---
+
+## Ajouter un nouveau Worker ML au Cluster
+
+**Procédure standardisée pour intégrer une nouvelle machine ML (GPU ou CPU):**
+
+1. **Lire** [INSTALLATION.md — Section 1: Ray Worker Setup](./INSTALLATION.md#1-ray-worker-setup)
+2. **Adapter les specs** pour votre machine (CPU cores, GPU count, RAM)
+3. **Configurer NFS** (Section 1.5) — Monter `/mnt/ml-store` et `/mnt/bonestore`
+4. **Installer Exporters** (Section 2) — Node Exporter + GPU Exporter si GPU
+5. **Vérifier la connexion** (Section 1.4) — `curl http://10.0.0.44:9469/api/nodes`
+
+**Résultat attendu** : Machine apparaît dans `ray status` et Prometheus scrape ses métriques dans Grafana.
+
+**Template specs** pour différents types de machines:
+```bash
+# GPU Worker (comme OnyxCortex)
+NUM_CPUS=16
+NUM_GPUS=1
+RAY_MEMORY=46000000000
+--shm-size=10gb
+
+# CPU Worker (comme Glia)
+NUM_CPUS=20
+NUM_GPUS=0
+RAY_MEMORY=47000000000
+--shm-size=20gb
+
+# Lightweight GPU (comme OnyxPoint)
+NUM_CPUS=10
+NUM_GPUS=1
+RAY_MEMORY=23000000000
+--shm-size=8gb
+```
+
+---
 
 ## Modules
 
@@ -148,29 +226,43 @@ ml-compute/
 
 ## Monitoring Stack
 
-**Prometheus + Grafana** pour monitoring du cluster Ray (voir `monitoring/README.md`).
+**Prometheus + Grafana** pour monitoring temps-réel du cluster Ray.
 
 ```
-OnyxSoma (10.0.0.44)
+OnyxSoma (10.0.0.44) — Monitoring Central
 ├── Prometheus (:9090)
-│   └── Scrapes: node-exporter (9100), gpu-exporter (9445), Ray Dashboard (8265)
+│   ├── Scrape interval: 15s
+│   ├── Retention: 30 days
+│   └── Scrapes les targets:
+│       ├── node-exporter (:9100) sur tous les workers
+│       ├── gpu-exporter (:9445) sur workers GPU
+│       └── Ray Dashboard API (:8265)
+│
 └── Grafana (:3000)
-    └── Visualizes Prometheus metrics + Ray cluster health
+    ├── Login: admin / PYjAtvTXDy6ZHRm
+    └── Dashboards:
+        ├── 1860 — Node Exporter Full (CPU, Memory, Disk, Network)
+        ├── 7752 — NVIDIA GPU Metrics (GPU util, memory, temperature)
+        └── 3662 — Prometheus Stats (health, scrape performance)
     
-ML Workers
+ML Workers — Metrics Export
 ├── OnyxCortex (10.0.0.26)
-│   ├── Node Exporter (:9100) — CPU, Memory, Disk, Network
-│   └── NVIDIA GPU Exporter (:9445) — GPU util, memory, temperature
+│   ├── Node Exporter (:9100) — Systemd service
+│   └── GPU Exporter (:9445) — nvidia-smi script (every 15s)
+│
 ├── Glia (10.0.0.8)
-│   └── Node Exporter (:9100) — CPU, Memory, Disk, Network
+│   └── Node Exporter (:9100) — System metrics (no GPU)
+│
 └── OnyxPoint (10.0.0.86)
-    ├── Node Exporter (:9100) — CPU, Memory, Disk, Network
-    └── NVIDIA GPU Exporter (:9445) — GPU util, memory, temperature
+    ├── Node Exporter (:9100) — System metrics
+    └── GPU Exporter (:9445) — GPU metrics (T1000 legacy)
 ```
 
-**Accès** :
-- Prometheus: `http://10.0.0.44:9090`
-- Grafana: `http://10.0.0.44:3000` (admin/admin)
+**Accès Monitoring**:
+- Prometheus: `http://10.0.0.44:9090` (queries, targets, alerts)
+- Grafana: `http://10.0.0.44:3000` (dashboards, visualisation)
+
+**Pour ajouter monitoring à un nouveau worker**: Voir [INSTALLATION.md — Section 2](./INSTALLATION.md#2-monitoring-exporters)
 
 ## Dépendances
 
@@ -221,6 +313,63 @@ Soumettre via : `curl -X POST http://10.0.0.44:9469/api/jobs -d '{...}'`
 7. ⏳ Job templates Phase B: predict_batch, inference endpoints
 8. ⏳ Tests end-to-end: soumettre jobs via /api/jobs
 
+---
+
+## Communication & Data Flow
+
+### Ray Jobs Workflow
+```
+1. Utilisateur soumet un job via API
+   POST /api/jobs
+   ↓
+2. ml-compute (OnyxSoma) envoie au Ray Head
+   ↓
+3. Ray Head distribue aux workers disponibles (OnyxCortex, Glia, OnyxPoint)
+   ↓
+4. Worker exécute le job dans un container Docker
+   ├─ Accès NFS: /mnt/ml-store, /mnt/bonestore
+   ├─ Accès PostgreSQL: label-generator API (OnyxSynapse:9466)
+   └─ Accès Qdrant: vector search (OnyxSynapse:6333)
+   ↓
+5. Job logs + metrics retournés via /api/jobs/{id}
+```
+
+### Service Dependencies
+```
+Ray Workers ──httpx──> PostgreSQL (OnyxSynapse:5432)
+                     ├─ Fetch validated annotations
+                     └─ Store training metadata
+
+Ray Workers ──httpx──> label-generator (OnyxSynapse:9466)
+                     └─ Fetch training labels by bone type
+
+Ray Workers ──httpx──> Qdrant (OnyxSynapse:6333)
+                     └─ Vector search (if needed)
+
+bone-ml (OnyxSynapse) ──http──> ml-compute API (OnyxSoma:9469)
+                              └─ Submit training jobs to Ray
+
+Monitoring ──scrape──> Node Exporter (:9100)
+           ├─────────> GPU Exporter (:9445)
+           └─────────> Ray Dashboard (:8265)
+```
+
+### NFS Access Pattern
+**Tous les Ray workers doivent accéder aux mêmes volumes NFS** :
+```
+/mnt/ml-store  (read-write)
+├── datasets/     ← Training data
+├── models/       ← Pretrained models
+└── runs/         ← Training outputs
+
+/mnt/bonestore (read-only)
+└── X-ray images  ← Fluoroscopic images
+```
+
+Ces volumes sont **bind-mountés dans les containers Docker** (voir `start-ray-worker.sh`).
+
+---
+
 ## Principes de développement
 
 - **Modules < 300 lignes**: Chaque fichier service.py et routes.py reste compacts
@@ -229,3 +378,5 @@ Soumettre via : `curl -X POST http://10.0.0.44:9469/api/jobs -d '{...}'`
 - **Tests unitaires**: Par module dans `modules/{nom}/tests/`
 - **Async/await**: httpx pour HTTP, asyncio pour parallélisation
 - **Pas de credentials en dur**: Tous les secrets via Vault
+- **NFS critical**: Tous les workers doivent avoir accès aux mêmes NFS volumes
+- **Network access**: Ray workers peuvent appeler services externes via httpx
