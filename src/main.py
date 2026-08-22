@@ -102,15 +102,6 @@ async def lifespan(app: FastAPI):
     # Startup
     await ray_client.connect()
 
-    # Initialize SAM Serve manager (no auto-deploy, user controls via POST /api/serve/sam/deploy)
-    try:
-        from src.modules.sam.serve import get_sam_manager
-
-        sam_manager = get_sam_manager()
-        logger.info("SAM Serve manager ready (deploy via POST /api/serve/sam/deploy)")
-    except Exception as e:
-        logger.warning(f"SAM Serve manager initialization failed (optional): {e}")
-
     # Initialize OnyxClient (optional - non-blocking)
     try:
         onyx = OnyxClient(skill_name="ml-compute")
