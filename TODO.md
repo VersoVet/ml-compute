@@ -58,7 +58,7 @@
 - [x] Health check OK sur OnyxSoma
 - [x] Créer config/ml-compute.yaml
 
-## Phase 6: Job Templates (IN PROGRESS)
+## Phase 6: Job Templates (DONE)
 
 - [x] Créer structure jobs/
 - [x] Créer job template bone-recognition
@@ -68,8 +68,8 @@
   - [x] train_yolo.py (ultralytics YOLO)
   - [x] README.md avec exemples curl
 - [x] Mettre à jour ARCHITECTURE.md avec job templates
-- [ ] Tester les jobs avec pytest
-- [ ] Valider avec /forge-validate-full
+- [x] Tester les jobs avec pytest (11/11 PASS)
+- [x] Valider avec /forge-validate-full (VALID, 0E/10W)
 
 ## Phase 7: Tests End-to-End (DONE)
 
