@@ -2,12 +2,16 @@
 
 ## Vue d'ensemble
 
-**ml-compute** est un **orchestrateur ML centralisé basé sur Ray**. Le cluster déploie les jobs training sur des workers ML distants (GPU/CPU) et fournit une API FastAPI pour soumettre/monitorer les tâches.
+**ml-compute** est un **orchestrateur ML centralisé multi-couche** combinant:
+1. **Nomad** — Orchestration des ressources GPU (allocation exclusive, anti-conflit)
+2. **Ray** — Jobs training distribués sur workers
+3. **FastAPI** — API unifiée pour soumettre jobs
 
 **Architecture en 3 niveaux:**
-1. **Ray Cluster** — Orchestration & API (OnyxSoma head + workers)
-2. **Skills** — Services métier (bone-ml, bone-annotator sur OnyxSynapse)
-3. **Infrastructure** — Services transversaux (Axon embeddings, monitoring Prometheus/Grafana)
+1. **Nomad Cluster** — Gestion GPU + allocation ressources (OnyxSoma server + workers clients)
+2. **Ray Cluster** — Exécution jobs ML (Ray head + workers conteneurisés)
+3. **Skills** — Services métier (bone-ml, bone-annotator sur OnyxSynapse)
+4. **Infrastructure** — Services transversaux (Axon embeddings, monitoring Prometheus/Grafana)
 
 ---
 
@@ -57,6 +61,104 @@ ML Workers (Docker rayproject/ray:2.35.0-py312, NFS + Local storage)
   - `/mnt/bonestore` → images fluoroscopiques read-only (10.0.0.52:/srv/bones)
 
 **Installation d'un nouveau worker**: Voir [INSTALLATION.md](./INSTALLATION.md#1-ray-worker-setup)
+
+---
+
+## Orchestration GPU via Nomad
+
+### Problème résolu
+**Conflit GPU critique**: Avant Nomad, OnyxCortex exécutait simultanément:
+- **SAM Docker** (inference pour annotations) — réserve GPU 1
+- **Ray Training Jobs** (bone-ml) — réserve GPU 1
+→ **Crash CUDA: 2 processus sur 1 GPU = OOM + segfault**
+
+### Solution: Nomad + Coordonnée GPU
+**Nomad** (HashiCorp orchestrator) manage l'allocation GPU **au niveau OS**, garantissant:
+- **Isolation GPU**: Chaque job (SAM ou Training) obtient des GPUs **exclusives**
+- **Prévention de conflit**: Si SAM utilise GPU 1, Ray jobs attendent sa libération
+- **Scheduling intelligent**: Nomad choisit le worker optimal en fonction des ressources libres
+
+### Architecture Nomad
+```
+OnyxSoma (10.0.0.44) — Nomad Server
+├── Raft consensus (leader automátique)
+├── Job scheduler
+├── State machine (allocation tracking)
+└── HTTP API (:4646) ← ml-compute queries
+
+Workers Nomad Clients (Rejisters au Server)
+├── OnyxCortex (10.0.0.26) — Client + 1 GPU RTX 4070 SUPER
+├── OnyxPoint (10.0.0.86) — Client + 1 GPU T1000 8GB
+└── Glia (10.0.0.8) — Client (CPU-only)
+
+Coordination SAM ↔ Ray:
+┌─────────────────────────────────────────┐
+│ SAM Annotation (Docker)                 │
+│ ✓ Acquiert GPU via Nomad                │
+│ Exécute inférence pendant 2-5 min        │
+│ ✓ Libère GPU en fin                     │
+└────────────────────┬────────────────────┘
+                     │ GPU libre? (Nomad checks)
+                     ▼
+┌─────────────────────────────────────────┐
+│ Ray Training Job soumis                 │
+│ ✓ Nomad vérifie GPU disponible          │
+│ ✓ Alloue GPU exclusif au job            │
+│ Exécute training bone-ml pendant 1-2h   │
+│ ✓ Libère GPU en fin                     │
+└─────────────────────────────────────────┘
+```
+
+### Module Nomad dans ml-compute
+```
+src/modules/nomad/
+├── service.py — NomadManager
+│   ├── connect() / disconnect()
+│   ├── submit_job(NomadJobRequest) → job_id
+│   ├── get_job_status(job_id) → NomadJobStatus
+│   ├── stop_job(job_id)
+│   ├── get_cluster_status() → nodes_ready, gpus_total, gpus_available
+│   └── get_gpu_status() → per-node GPU allocation
+│
+├── models.py — Pydantic Models
+│   ├── NomadJobRequest (name, image, driver, num_gpus, env_vars, volumes)
+│   ├── NomadJobStatus (status, allocations)
+│   ├── GPUStatus (node_id, num_gpus, available_gpus, in_use)
+│   └── NomadClusterStatus (nodes_ready, gpus_total, gpus_available, jobs_running)
+│
+└── routes.py — FastAPI Endpoints
+    ├── GET /api/nomad/status → Cluster status
+    ├── POST /api/nomad/jobs/submit → Submit job
+    ├── GET /api/nomad/jobs/{job_id} → Job status
+    ├── POST /api/nomad/jobs/{job_id}/stop → Stop job
+    └── GET /api/nomad/gpu-status → GPU allocation per node
+```
+
+**Endpoints clés**:
+```bash
+# Cluster status (3 nœuds, 2 GPUs)
+curl http://10.0.0.44:9469/api/nomad/status
+# {"nodes_ready": 3, "gpus_total": 2, "gpus_available": 2, "jobs_running": 0}
+
+# Soumettre un job avec GPU
+curl -X POST http://10.0.0.44:9469/api/nomad/jobs/submit \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "bone-ml-training-001",
+    "image": "rayproject/ray:2.35.0-py312",
+    "driver": "docker",
+    "constraints": [{"task_name": "training", "cpu_mhz": 8000, "memory_mb": 16384, "num_gpus": 1}],
+    "command": "python /app/train.py",
+    "env_vars": {"EPOCHS": "100", "BATCH_SIZE": "32"}
+  }'
+
+# GPU status (vérifie qui utilise les GPUs)
+curl http://10.0.0.44:9469/api/nomad/gpu-status
+# [
+#   {"node_name": "onyxcortex", "num_gpus": 1, "available_gpus": 0, "in_use": ["bone-ml-001"]},
+#   {"node_name": "onyxpoint", "num_gpus": 1, "available_gpus": 1, "in_use": []}
+# ]
+```
 
 ---
 
@@ -120,6 +222,27 @@ RAY_MEMORY=23000000000
 
 ## Modules
 
+### 0. **nomad** (`src/modules/nomad/`) ⭐ NEW
+Orchestration GPU via Nomad. Prévient les conflits GPU en garantissant allocation exclusive aux jobs.
+
+**Fichiers**:
+- `service.py`: NomadManager avec Nomad HTTP API client
+- `models.py`: NomadJobRequest, NomadJobStatus, GPUStatus, NomadClusterStatus
+- `routes.py`: Endpoints `/api/nomad/*`
+
+**Endpoints**:
+- `GET /api/nomad/status`: Cluster status (nodes ready, GPUs total/available)
+- `POST /api/nomad/jobs/submit`: Submit job avec reservation GPU
+- `GET /api/nomad/jobs/{job_id}`: Job status + allocations
+- `POST /api/nomad/jobs/{job_id}/stop`: Stop job + libère GPU
+- `GET /api/nomad/gpu-status`: GPU allocation per node (qui utilise quelle GPU)
+
+**Intégration SAM**:
+- SAM Docker démarre → acquiert GPU via Nomad
+- Pendant SAM actif → Ray jobs voient GPU occupée
+- SAM termine → libère GPU automatiquement
+- Prochain Ray job → Nomad alloue GPU libérée
+
 ### 1. **jobs** (`src/modules/jobs/`)
 Proxy vers Ray Jobs API. Gère la soumission, le suivi et l'arrêt des jobs ML.
 
@@ -178,6 +301,14 @@ ml-compute/
 │   │
 │   └── modules/
 │       ├── __init__.py
+│       ├── nomad/
+│       │   ├── __init__.py
+│       │   ├── service.py      # Nomad orchestration client
+│       │   ├── models.py       # Job + GPU status models
+│       │   ├── routes.py       # FastAPI routes
+│       │   └── tests/
+│       │       └── test_nomad.py
+│       │
 │       ├── jobs/
 │       │   ├── __init__.py
 │       │   ├── service.py      # Ray Jobs API proxy

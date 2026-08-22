@@ -100,7 +100,35 @@
 
 ## Phase 9: Cluster Expansion & Architecture Clarification (DONE)
 
-## Phase 10: Monitoring Infrastructure (IN PROGRESS)
+## Phase 10: GPU Resource Coordination via Nomad (DONE)
+
+### Problem Solved
+- **Conflit GPU critique**: SAM Docker + Ray Training sur même GPU = CUDA crash
+- **Solution**: Nomad orchestration avec allocation GPU exclusive
+
+### Implementation Complete
+- [x] Installer Nomad 1.9.0 sur cluster (OnyxSoma server + 3 workers)
+- [x] Configurer clients Nomad sur workers (RPC registration, plugin support)
+- [x] Créer module `src/modules/nomad/`
+  - [x] `service.py`: NomadManager (submit_job, get_status, gpu_status)
+  - [x] `models.py`: NomadJobRequest, NomadJobStatus, GPUStatus, NomadClusterStatus
+  - [x] `routes.py`: Endpoints `/api/nomad/*` (status, submit, stop, gpu-status)
+- [x] Intégrer Nomad dans `main.py` (lifespan connect/disconnect, router inclusion)
+- [x] Mettre à jour ARCHITECTURE.md (sections Nomad + GPU coordination)
+- [x] Valider et déployer ml-compute v0.1.54
+- [x] Vérifier cluster Nomad (3 nœuds ready, 2 GPUs détectées)
+
+### Endpoints Working
+- `GET /api/nomad/status` → Cluster status (3 nodes, 2 GPUs)
+- `POST /api/nomad/jobs/submit` → Submit job with GPU reservation
+- `GET /api/nomad/gpu-status` → Per-node GPU allocation
+
+### Next: GPU Device Plugin
+- [ ] Installer NVIDIA GPU device plugin pour Nomad (fingerprinting GPU automatique)
+- [ ] Intégrer SAM job spec pour allocation GPU exclusive
+- [ ] Tester conflit prévention (SAM + Ray training simultanés)
+
+## Phase 11: Monitoring Infrastructure (TODO)
 
 - [ ] Installer Prometheus + Grafana stack
   - [x] Configuration Prometheus (prometheus.yml)
@@ -110,7 +138,7 @@
   - [ ] Déployer sur OnyxSoma
   - [ ] Installer Node Exporter sur tous les workers
   - [ ] Installer NVIDIA GPU Exporter sur workers GPU
-  - [ ] Créer dashboards Grafana personnalisés
+  - [ ] Créer dashboards Grafana personnalisés (Ray metrics + Nomad metrics)
   - [ ] Configurer alertes Prometheus
 
 ## Phase 9: Cluster Expansion & Architecture Clarification (DONE)

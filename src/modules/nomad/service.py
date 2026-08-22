@@ -283,20 +283,6 @@ class NomadManager:
         """
         task_group_constraints = request.constraints[0] if request.constraints else None
 
-        task_resources = {
-            "CPU": task_group_constraints.cpu_mhz if task_group_constraints else 1000,
-            "MemoryMB": task_group_constraints.memory_mb if task_group_constraints else 512,
-        }
-
-        # Add GPU if requested
-        if task_group_constraints and task_group_constraints.num_gpus > 0:
-            task_resources["Devices"] = [
-                {
-                    "Name": "nvidia_gpu",
-                    "Count": task_group_constraints.num_gpus,
-                }
-            ]
-
         # Build driver config based on driver type
         if request.driver == "docker":
             driver_config = {
@@ -315,22 +301,25 @@ class NomadManager:
                 "args": ["-c", request.command],
             }
 
+        # Build resource requirements (Nomad API format)
+        task_resources = {
+            "CPU": task_group_constraints.cpu_mhz if task_group_constraints else 1000,
+            "MemoryMB": task_group_constraints.memory_mb if task_group_constraints else 512,
+        }
+
+        # Build task specification
         task = {
             "Name": request.name,
             "Driver": request.driver,
             "Config": driver_config,
             "Resources": task_resources,
-            "Env": request.env_vars,
-            "Timeout": f"{request.timeout_seconds}s",
-            "MaxRetries": request.max_retries,
-            "RestartPolicy": {
-                "Attempts": request.max_retries,
-                "Interval": "30s",
-                "Delay": "15s",
-                "Mode": "fail",
-            },
+            "Env": request.env_vars if request.env_vars else {},
         }
 
+        if request.timeout_seconds > 0:
+            task["Timeout"] = f"{request.timeout_seconds}s"
+
+        # Build job specification (Nomad API format)
         job_spec = {
             "ID": request.name,
             "Name": request.name,
@@ -339,7 +328,7 @@ class NomadManager:
             "Datacenters": request.datacenters,
             "TaskGroups": [
                 {
-                    "Name": request.name,
+                    "Name": f"{request.name}-group",
                     "Count": 1,
                     "Tasks": [task],
                 }
