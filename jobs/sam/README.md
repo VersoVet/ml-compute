@@ -1,82 +1,64 @@
 # SAM (Segment Anything Model) Deployment via Ray Serve
 
-Deploy the Segment Anything Model (vit_b) on OnyxCortex GPU worker.
+Deploy the Segment Anything Model (vit_b) on OnyxCortex GPU worker for interactive annotation with CVAT.
+
+## ⚠️ CRITICAL: GPU Resource Management
+
+**OnyxCortex has 1 GPU (RTX 4070 SUPER)**. SAM reserves `num_gpus=1` permanently when deployed.
+
+- While SAM is running → GPU is 100% reserved, training jobs are BLOCKED in PENDING state
+- SAM must be explicitly stopped before launching training jobs
+- GPU becomes available for training only after SAM is stopped
+
+**Strategy**: SAM is deployed/stopped on-demand:
+1. **Annotation Phase**: Start SAM, use for annotations, then STOP
+2. **Training Phase**: Launch training jobs (GPU now available)
+
+---
 
 ## Prerequisites
 
-- Ray cluster running (tested on Ray 2.35.0)
-- Model file: `~/sam-gpu/sam_vit_b_01ec64.pth` on OnyxCortex
-- GPU: RTX 4070 SUPER (12GB VRAM)
-- Python packages: `segment-anything`, `opencv-python`, `Pillow`
+- Ray cluster running (OnyxSoma head + OnyxCortex worker)
+- Model file: `~/sam-gpu/sam_vit_b_01ec64.pth` on OnyxCortex (375MB)
+- GPU: RTX 4070 SUPER (12GB VRAM) - OnyxCortex ✅
+- Python packages: `segment-anything`, `opencv-python`, `Pillow`, `torch`
 
-## Usage
+**NOT recommended for OnyxPoint**: T1000 8GB is insufficient (~10GB required for SAM vit_b)
 
-### Option 1: Deploy as Ray Job
+---
 
-```bash
-# Submit deployment job to Ray cluster
-curl -X POST http://10.0.0.44:9469/api/jobs \
-  -H "Content-Type: application/json" \
-  -d '{
-    "name": "sam-serve-deploy",
-    "entrypoint": "python /opt/onyx/skills/ml-compute/jobs/sam/deploy_serve.py --ray-address http://10.0.0.44:8265 --serve-port 9470",
-    "runtime_env": {
-      "pip": [
-        "segment-anything",
-        "opencv-python",
-        "Pillow",
-        "torch",
-        "torchvision",
-        "numpy"
-      ],
-      "working_dir": "/opt/onyx/skills/ml-compute"
-    }
-  }'
-```
+## Usage: Start / Stop Lifecycle
 
-### Option 2: Deploy as Systemd Service
+### Step 1: Start SAM (Before Annotations)
 
 ```bash
-# Create systemd service on OnyxSoma
-sudo tee /etc/systemd/system/sam-serve.service > /dev/null <<'EOF'
-[Unit]
-Description=SAM Ray Serve Deployment
-After=network-online.target
-Wants=network-online.target
+# Start SAM Serve deployment
+curl -X POST http://10.0.0.44:9469/api/serve/start-sam
 
-[Service]
-Type=simple
-User=onyx
-WorkingDirectory=/opt/onyx/skills/ml-compute
-Environment="RAY_HEAD_ADDRESS=http://10.0.0.44:8265"
-ExecStart=/usr/bin/python3 /opt/onyx/skills/ml-compute/jobs/sam/deploy_serve.py
-Restart=on-failure
-RestartSec=10
-
-[Install]
-WantedBy=multi-user.target
-EOF
-
-sudo systemctl daemon-reload
-sudo systemctl enable --now sam-serve
-```
-
-## API Endpoint
-
-**URL**: `POST http://10.0.0.44:9470/api/interact`
-
-**Request body**:
-```json
+# Response:
 {
-  "image": "base64_encoded_image_or_uint8_array",
-  "positive_points": [[x1, y1], [x2, y2]],
-  "negative_points": [[x3, y3]],
-  "prompt_labels": [1, 1, 0]
+  "status": "deployed",
+  "endpoint": "http://10.0.0.44:9470/api/interact",
+  "job_id": "raysubmit_abc123",
+  "message": "SAM deployed successfully, GPU reserved (num_gpus=1)"
 }
 ```
 
-**Response**:
-```json
+### Step 2: Use SAM for Annotations
+
+CVAT or your annotation tool sends POST requests to SAM:
+
+```bash
+curl -X POST http://10.0.0.44:9470/api/interact \
+  -H "Content-Type: application/json" \
+  -d '{
+    "image": "base64_encoded_image",
+    "positive_points": [[100, 100], [200, 200]],
+    "negative_points": [[150, 150]],
+    "prompt_labels": [1, 1, 0]
+  }'
+
+# Response:
 {
   "mask": "base64_encoded_png_mask",
   "area": 12345,
@@ -85,44 +67,148 @@ sudo systemctl enable --now sam-serve
 }
 ```
 
-## Testing
+### Step 3: Check SAM Status
 
 ```bash
-# Test with a sample image
-python3 <<'PYTHON'
-import base64
-import cv2
-import requests
+# Monitor SAM responsiveness
+curl -X GET http://10.0.0.44:9469/api/serve/sam/status
 
-# Load test image
-image = cv2.imread("test.jpg")
-_, buffer = cv2.imencode(".png", image)
-image_base64 = base64.b64encode(buffer).decode("utf-8")
-
-# Send request
-response = requests.post(
-    "http://10.0.0.44:9470/api/interact",
-    json={
-        "image": image_base64,
-        "positive_points": [[100, 100], [200, 200]],
-        "negative_points": []
-    }
-)
-
-print(response.json())
-PYTHON
+# Response:
+{
+  "status": "running",
+  "latency_ms": 450,
+  "endpoint": "http://10.0.0.44:9470/api/interact"
+}
 ```
 
-## Scheduling
+### Step 4: Stop SAM (Before Training)
 
-The deployment uses `num_gpus=1` which schedules it to run on OnyxCortex (the GPU worker).
+**MANDATORY before launching training jobs!**
 
-- Head node (OnyxSoma): No GPUs reserved → runs head infrastructure
-- Worker (OnyxCortex): 1 GPU reserved → runs SAM predictor
+```bash
+# Stop SAM Serve deployment
+curl -X POST http://10.0.0.44:9469/api/serve/stop-sam
 
-## Notes
+# Response:
+{
+  "status": "stopped",
+  "message": "SAM deployment stopped, GPU is now available for training"
+}
+```
 
-- Model loading takes ~2-3 seconds first time
-- Predictions take ~500ms-1s depending on image size
-- Max image size: 1024x1024 recommended for RTX 4070 SUPER
-- Keep alive: Ray Serve keeps the deployment alive permanently
+### Step 5: Launch Training (GPU Now Available)
+
+```bash
+# GPU is now free, training can use num_gpus=1
+curl -X POST http://10.0.0.44:9469/api/jobs \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "bone-ml-training-after-annotations",
+    "entrypoint": "python jobs/bone-ml/train_multitask.py",
+    "runtime_env": {
+      "working_dir": "/opt/onyx/skills/ml-compute",
+      "env_vars": {
+        "BONE_TYPE": "humerus",
+        "EPOCHS": "100"
+      }
+    },
+    "submit_kwargs": {"num_gpus": 1}
+  }'
+```
+
+---
+
+## API Endpoints
+
+### POST /api/serve/start-sam
+Start SAM deployment with GPU reservation.
+
+### POST /api/serve/stop-sam
+Stop SAM and free GPU for training.
+
+### GET /api/serve/sam/status
+Check if SAM is running and responsive.
+
+### GET /api/serve/sam/info
+Get SAM specs, resource requirements, and usage strategy.
+
+---
+
+## Performance Characteristics
+
+| Metric | Value |
+|--------|-------|
+| Model load time | ~2-3 seconds (first time) |
+| Inference latency | 500-1000ms per prediction |
+| Max batch size | 1 (single image) |
+| Memory peak | ~10-11 GB during inference |
+| Recommended max image size | 1024x1024 |
+
+---
+
+## Resource Allocation Summary
+
+```
+Scenario 1: Annotations Only
+┌─────────────────────┐
+│ GPU 1: SAM running  │
+│ Training: BLOCKED   │
+└─────────────────────┘
+
+Scenario 2: After stopping SAM
+┌─────────────────────┐
+│ GPU 1: Training     │
+│ Annotations: N/A    │
+└─────────────────────┘
+
+Scenario 3: After training finishes
+┌─────────────────────┐
+│ GPU 1: Available    │
+│ Can restart SAM     │
+└─────────────────────┘
+```
+
+---
+
+## Troubleshooting
+
+### SAM not responding after start-sam
+- Check job status: `curl http://10.0.0.44:9469/api/jobs/{job_id}`
+- Check OnyxCortex connectivity: `curl http://10.0.0.44:9469/api/nodes`
+- Verify model file exists: `ssh onyx@10.0.0.26 ls ~/sam-gpu/`
+
+### Training job stuck in PENDING while SAM is running
+- **This is expected!** SAM has num_gpus=1 reserved
+- Stop SAM: `curl -X POST http://10.0.0.44:9469/api/serve/stop-sam`
+- Training will start immediately after SAM stops
+
+### OnyxPoint GPU incompatibility
+- T1000 has 8GB, SAM needs ~10GB → guaranteed OOM
+- OnyxPoint cannot run SAM vit_b
+- Use OnyxCortex only
+
+---
+
+## Integration with CVAT
+
+CVAT Smart Tool can call SAM endpoint directly after start-sam:
+
+```python
+# CVAT annotation plugin example
+def get_mask_from_sam(image_base64, points_positive, points_negative):
+    import requests
+    response = requests.post(
+        "http://10.0.0.44:9470/api/interact",
+        json={
+            "image": image_base64,
+            "positive_points": points_positive,
+            "negative_points": points_negative
+        },
+        timeout=5
+    )
+    if response.status_code == 200:
+        mask_base64 = response.json()["mask"]
+        return mask_base64
+    else:
+        raise RuntimeError("SAM not responding - start it with POST /api/serve/start-sam")
+```

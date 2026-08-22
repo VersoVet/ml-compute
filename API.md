@@ -456,31 +456,35 @@ curl -X POST http://10.0.0.44:9469/api/jobs \
 
 Voir `jobs/bone-ml/README.md` pour docs complètes, guide des encodeurs, et exemple pipeline complet.
 
-### SAM (Segment Anything Model) Deployment (`jobs/sam/deploy_serve.py`)
+### SAM (Segment Anything Model) - Lifecycle Management
 
 Déploie Segment Anything Model (vit_b) via Ray Serve pour l'annotation assistée avec CVAT.
 
-**Déployer SAM vit_b sur OnyxCortex GPU** :
+**⚠️ CRITICAL: GPU Resource Management**
+- OnyxCortex a 1 GPU (RTX 4070 SUPER)
+- SAM réserve `num_gpus=1` → GPU complètement utilisé
+- Les jobs de training sont BLOQUÉS tant que SAM est actif
+- **Stratégie**: Start SAM → Annotate → Stop SAM → Launch training
+
+#### POST /api/serve/start-sam
+**Démarrer SAM pour les annotations**
+
 ```bash
-curl -X POST http://10.0.0.44:9469/api/jobs \
-  -H "Content-Type: application/json" \
-  -d '{
-    "name": "sam-serve-deploy",
-    "entrypoint": "python jobs/sam/deploy_serve.py --ray-address http://10.0.0.44:8265 --serve-port 9470",
-    "runtime_env": {
-      "pip": [
-        "segment-anything",
-        "opencv-python",
-        "Pillow",
-        "torch",
-        "torchvision"
-      ],
-      "working_dir": "/opt/onyx/skills/ml-compute"
-    }
-  }'
+curl -X POST http://10.0.0.44:9469/api/serve/start-sam
 ```
 
-**Endpoint** : `POST http://10.0.0.44:9470/api/interact`
+**Response** (202 Accepted):
+```json
+{
+  "status": "deployed",
+  "endpoint": "http://10.0.0.44:9470/api/interact",
+  "job_id": "raysubmit_abc123",
+  "message": "SAM deployed successfully, GPU reserved (num_gpus=1)"
+}
+```
+
+#### POST http://10.0.0.44:9470/api/interact
+**Utiliser SAM pour la segmentation interactive**
 
 **Request** :
 ```json
@@ -502,14 +506,53 @@ curl -X POST http://10.0.0.44:9469/api/jobs \
 }
 ```
 
-**Scheduling** : Utilise `num_gpus=1` → s'exécute sur OnyxCortex (RTX 4070 SUPER)
+**Latence** : 500-1000ms par prédiction
+
+#### POST /api/serve/stop-sam
+**Arrêter SAM et libérer le GPU pour le training**
+
+```bash
+curl -X POST http://10.0.0.44:9469/api/serve/stop-sam
+```
+
+**Response** (200 OK):
+```json
+{
+  "status": "stopped",
+  "message": "SAM deployment stopped, GPU is now available for training"
+}
+```
+
+#### GET /api/serve/sam/status
+**Vérifier l'état de SAM**
+
+```bash
+curl -X GET http://10.0.0.44:9469/api/serve/sam/status
+```
+
+**Response** (SAM running):
+```json
+{
+  "status": "running",
+  "latency_ms": 450,
+  "endpoint": "http://10.0.0.44:9470/api/interact"
+}
+```
+
+#### GET /api/serve/sam/info
+**Spécifications SAM et requirements**
+
+```bash
+curl -X GET http://10.0.0.44:9469/api/serve/sam/info
+```
 
 **Notes** :
-- Modèle : ~/sam-gpu/sam_vit_b_01ec64.pth (12GB VRAM)
-- Latence : ~500ms-1s par prédiction
+- Modèle : ~/sam-gpu/sam_vit_b_01ec64.pth (375MB model, 10GB VRAM requis)
+- OnyxCortex : RTX 4070 SUPER 12GB ✅ Approprié
+- OnyxPoint : T1000 8GB ❌ Insuffisant (CUDA OOM garanti)
 - Image max recommandée : 1024x1024
 
-Voir `jobs/sam/README.md` pour docs complètes et guide de déploiement.
+Voir `jobs/sam/README.md` pour docs complètes et workflow complet.
 
 ---
 

@@ -1,4 +1,17 @@
-"""Ray Serve deployment for Segment Anything Model (SAM)."""
+"""Ray Serve deployment for Segment Anything Model (SAM).
+
+IMPORTANT: SAM is deployed as a stateful Ray Serve actor with GPU reservation.
+When active, it reserves num_gpus=1 on OnyxCortex, blocking other GPU jobs.
+
+Usage strategy:
+1. Start SAM when annotations begin: POST /serve/start-sam
+2. Use for annotations: POST /api/interact
+3. Stop SAM when done: POST /serve/stop-sam
+4. Launch training jobs (GPU now available): POST /api/jobs
+
+Never use num_gpus=0.5 for SAM - GPU sharing risks CUDA OOM.
+Never deploy on OnyxPoint (T1000 8GB is insufficient for vit_b ~10GB).
+"""
 
 import io
 import logging
