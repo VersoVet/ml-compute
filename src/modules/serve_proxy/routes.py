@@ -1,4 +1,8 @@
-"""FastAPI routes for SAM service proxy (Docker backend)."""
+"""FastAPI routes for SAM service proxy (Ray Serve backend).
+
+Routes requests to SAM deployment on Ray Serve.
+Endpoint remains compatible with bone-annotator clients (no breaking changes).
+"""
 
 import logging
 from typing import Any
@@ -42,7 +46,7 @@ async def get_sam_ready() -> dict[str, Any]:
 
 @router.post("/sam/interact")
 async def sam_segment(request: InteractRequest) -> dict[str, Any]:
-    """Forward segmentation request to SAM Docker service.
+    """Forward segmentation request to SAM via Ray Serve.
 
     Args:
         request: Image and point prompts for segmentation.
