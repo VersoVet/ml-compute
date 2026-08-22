@@ -25,8 +25,10 @@ logger = logging.getLogger(__name__)
 
 @serve.deployment(
     name="sam-vit-b",
-    num_gpus=1,
-    ray_actor_options={"object_store_memory": 2_000_000_000},
+    ray_actor_options={
+        "num_gpus": 1,
+        "object_store_memory": 2_000_000_000,
+    },
 )
 class SAMDeployment:
     """SAM (Segment Anything Model) deployment for interactive segmentation."""
