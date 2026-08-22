@@ -25,6 +25,8 @@ from src.models import (
 from src.modules.jobs import routes as jobs_routes
 from src.modules.models import routes as models_routes
 from src.modules.nodes import routes as nodes_routes
+from src.modules.nomad.service import NomadManager
+from src.modules.nomad import routes as nomad_routes
 from src.modules.sam import routes as sam_routes
 from src.modules.serve import routes as serve_routes
 from src.modules.serve_proxy import routes as serve_proxy_routes
@@ -87,6 +89,7 @@ class RayClient:
 
 # Global clients
 ray_client = RayClient()
+nomad_manager = NomadManager()
 onyx = None
 
 
@@ -101,6 +104,7 @@ async def lifespan(app: FastAPI):
 
     # Startup
     await ray_client.connect()
+    await nomad_manager.connect()
 
     # Initialize OnyxClient (optional - non-blocking)
     try:
@@ -115,6 +119,9 @@ async def lifespan(app: FastAPI):
         logger.debug(f"OnyxClient initialization (optional): {e}")
         onyx = None
 
+    # Set nomad manager in routes
+    nomad_routes.set_nomad_manager(nomad_manager)
+
     yield
 
     # Shutdown
@@ -125,6 +132,7 @@ async def lifespan(app: FastAPI):
         except Exception as e:
             logger.debug(f"OnyxClient shutdown (optional): {e}")
 
+    await nomad_manager.disconnect()
     await ray_client.disconnect()
 
 
@@ -139,6 +147,7 @@ app = FastAPI(
 # Include routers
 app.include_router(jobs_routes.router, prefix="/api/jobs", tags=["jobs"])
 app.include_router(nodes_routes.router, prefix="/api/nodes", tags=["nodes"])
+app.include_router(nomad_routes.router, prefix="/api/nomad", tags=["nomad"])
 app.include_router(serve_routes.router, prefix="/api/serve", tags=["serve"])
 app.include_router(sam_routes.router, prefix="/api/serve", tags=["SAM Control"])
 app.include_router(serve_proxy_routes.router, prefix="/api/serve", tags=["SAM"])
