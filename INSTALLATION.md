@@ -49,12 +49,15 @@ NUM_GPUS=1   # 0 pour CPU-only, 1 pour GPU workers
 docker rm -f ray-worker 2>/dev/null || true
 
 # Démarrer le Ray worker
+# NOTE: NFS volumes (ml-store, bonestore) sont bind-mountés pour accès aux datasets/modèles
 docker run -d \
   --name ray-worker \
   --network host \
   --gpus all \
   --shm-size=10gb \
   --restart unless-stopped \
+  -v /mnt/ml-store:/mnt/ml-store:rw \
+  -v /mnt/bonestore:/mnt/bonestore:ro \
   -e RAY_memory=$RAY_MEMORY \
   -e RAY_object_store_memory=$RAY_OBJECT_STORE \
   rayproject/ray:2.35.0-py312 \
@@ -144,6 +147,36 @@ NUM_GPUS=1
 curl http://10.0.0.44:9469/api/nodes | jq '.nodes[] | select(.status=="alive")'
 
 # Vous devriez voir le worker dans la liste avec ses ressources
+```
+
+### 1.5 NFS Volume Mounts (Critiques pour training jobs)
+
+**Les Ray jobs doivent accéder aux NFS volumes** :
+- `/mnt/ml-store` — datasets, models, runs (partagé depuis 10.0.0.6)
+- `/mnt/bonestore` — images fluoroscopiques read-only (partagé depuis 10.0.0.52)
+
+**Le script docker run (section 1.2) include** :
+```bash
+-v /mnt/ml-store:/mnt/ml-store:rw \
+-v /mnt/bonestore:/mnt/bonestore:ro \
+```
+
+**Vérifier que les volumes sont bien accessibles** :
+```bash
+# À l'intérieur du container Ray
+docker exec ray-worker ls -la /mnt/ml-store/
+docker exec ray-worker ls -la /mnt/bonestore/
+
+# Devrait afficher les répertoires datasets/, models/, runs/ (ml-store)
+# et les dossiers d'images (bonestore)
+```
+
+**Note**: Les NFS doivent être montés sur l'hôte **AVANT** de démarrer Ray worker :
+```bash
+# Sur chaque worker ML
+sudo mkdir -p /mnt/ml-store /mnt/bonestore
+sudo mount -t nfs 10.0.0.6:/srv/nas/ml /mnt/ml-store
+sudo mount -t nfs 10.0.0.52:/srv/bones /mnt/bonestore
 ```
 
 ---
