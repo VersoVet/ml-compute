@@ -35,80 +35,53 @@ class SAMServeManager:
         self.is_deployed = False
 
     async def deploy(self) -> bool:
-        """Deploy SAM as Ray Serve deployment with GPU reservation.
+        """Deploy SAM on Ray Serve or Docker backend.
 
-        Uses Ray Dashboard REST API to deploy via ConfigFile API (no local Ray context needed).
-        Ray automatically schedules on available GPU workers (OnyxCortex, OnyxPoint, etc).
+        Currently uses Docker backend on OnyxCortex:9470.
+        Ray Serve deployment is planned for future implementation.
 
         Returns:
-            True if deployment succeeded, False otherwise.
+            True if deployment check succeeds, False otherwise.
         """
         try:
-            logger.info("Deploying SAM via Ray Serve REST API (num_gpus=1)...")
+            logger.info("Checking SAM deployment...")
 
-            # SAM Serve configuration via Ray Serve config file API
-            serve_config = {
-                "name": "SAM",
-                "deployments": [
-                    {
-                        "name": self.deployment_name,
-                        "class_path": "src.modules.sam.deployment:SAMDeployment",
-                        "num_replicas": 1,
-                        "max_replicas": 1,
-                        "ray_actor_options": {
-                            "num_gpus": 1,
-                            "memory": 2_000_000_000,
-                        },
-                        "route_prefix": f"/{self.deployment_name}",
-                    }
-                ],
-            }
-
-            # Submit config via Ray Serve REST API (no Python context needed)
+            # Check if SAM Docker container is running on OnyxCortex
             async with httpx.AsyncClient() as client:
-                # PUT config to Ray Serve controller
-                response = await client.put(
-                    f"{self.dashboard_url}/api/serve/config/",
-                    json=serve_config,
-                    timeout=HTTP_TIMEOUT,
+                response = await client.get(
+                    "http://10.0.0.26:9470/health",
+                    timeout=5.0,
                 )
                 response.raise_for_status()
-                logger.info(f"✓ SAM deployment config submitted to Ray Serve")
+                data = response.json()
 
-            self.is_deployed = True
-            logger.info(f"✓ SAM deployment at {self.endpoint} with num_gpus=1")
-            return True
+            self.is_deployed = data.get("status") == "ok"
+            if self.is_deployed:
+                logger.info("✓ SAM Docker backend is healthy on OnyxCortex:9470")
+                return True
+            else:
+                logger.warning("SAM Docker backend responding but unhealthy")
+                return False
 
         except Exception as e:
-            logger.error(f"Failed to deploy SAM: {e}", exc_info=True)
+            logger.warning(f"SAM Docker backend not available: {e}")
+            logger.info("Ray Serve deployment is a planned future enhancement")
             return False
 
     async def undeploy(self) -> bool:
-        """Stop SAM Ray Serve deployment and free GPU.
+        """Stop SAM Docker backend (or Ray Serve in future).
 
         Returns:
-            True if undeployment succeeded, False otherwise.
+            True if successful, False otherwise.
         """
         try:
-            logger.info("Undeploying SAM from Ray Serve...")
+            logger.info("Stopping SAM backend...")
 
-            # Submit empty config to remove SAM deployment
-            serve_config = {
-                "name": "SAM",
-                "deployments": [],  # Empty deployments list removes the app
-            }
-
-            async with httpx.AsyncClient() as client:
-                response = await client.put(
-                    f"{self.dashboard_url}/api/serve/config/",
-                    json=serve_config,
-                    timeout=HTTP_TIMEOUT,
-                )
-                response.raise_for_status()
-                logger.info(f"✓ SAM deployment config cleared from Ray Serve")
-
+            # For now, just check Docker status
+            # In future, will handle Ray Serve shutdown
             self.is_deployed = False
-            logger.info("✓ SAM undeployed, GPU freed")
+            logger.info("✓ SAM marked as undeployed")
+            logger.info("Note: Docker container must be managed separately")
             return True
         except Exception as e:
             logger.error(f"Failed to undeploy SAM: {e}", exc_info=True)
