@@ -103,6 +103,8 @@ async def fetch_validated_annotations(
             database=pg_db,
             user=pg_user,
             password=pg_password,
+            server_settings={"search_path": "bone_annotations,public"},
+            ssl=False,
         )
 
         sources = [s.strip() for s in source_filter.split(",")]

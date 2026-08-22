@@ -456,6 +456,72 @@ curl -X POST http://10.0.0.44:9469/api/jobs \
 
 Voir `jobs/bone-ml/README.md` pour docs complètes, guide des encodeurs, et exemple pipeline complet.
 
+### SAM (Segment Anything Model) Deployment (`jobs/sam/deploy_serve.py`)
+
+Déploie Segment Anything Model (vit_b) via Ray Serve pour l'annotation assistée avec CVAT.
+
+**Déployer SAM vit_b sur OnyxCortex GPU** :
+```bash
+curl -X POST http://10.0.0.44:9469/api/jobs \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "sam-serve-deploy",
+    "entrypoint": "python jobs/sam/deploy_serve.py --ray-address http://10.0.0.44:8265 --serve-port 9470",
+    "runtime_env": {
+      "pip": [
+        "segment-anything",
+        "opencv-python",
+        "Pillow",
+        "torch",
+        "torchvision"
+      ],
+      "working_dir": "/opt/onyx/skills/ml-compute"
+    }
+  }'
+```
+
+**Endpoint** : `POST http://10.0.0.44:9470/api/interact`
+
+**Request** :
+```json
+{
+  "image": "base64_encoded_image_or_uint8_array",
+  "positive_points": [[x1, y1], [x2, y2]],
+  "negative_points": [[x3, y3]],
+  "prompt_labels": [1, 1, 0]
+}
+```
+
+**Response** :
+```json
+{
+  "mask": "base64_encoded_png_mask",
+  "area": 12345,
+  "status": "success",
+  "image_shape": [1080, 1920, 3]
+}
+```
+
+**Scheduling** : Utilise `num_gpus=1` → s'exécute sur OnyxCortex (RTX 4070 SUPER)
+
+**Notes** :
+- Modèle : ~/sam-gpu/sam_vit_b_01ec64.pth (12GB VRAM)
+- Latence : ~500ms-1s par prédiction
+- Image max recommandée : 1024x1024
+
+Voir `jobs/sam/README.md` pour docs complètes et guide de déploiement.
+
+---
+
+## Updates
+
+### [v0.1.47] 2026-08-22
+- ✅ Ray cluster avec 2 workers (OnyxSoma head + OnyxCortex GPU)
+- ✅ NFS volumes montés dans ray-head et ray-worker containers
+- ✅ Jobs Ray testés avec accès NFS (/mnt/ml-store, /mnt/bonestore)
+- ✅ SAM (Segment Anything) deployment via Ray Serve
+- ✅ Fixed: asyncpg.connect() dans bone-ml/train_multitask.py (server_settings, ssl=False)
+
 ---
 
 ## Examples cURL
