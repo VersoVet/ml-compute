@@ -97,3 +97,13 @@
   - [x] Valider avec /forge-validate-full (VALID, 0E, 9W)
   - [x] Déployer avec /forge-deploy (v0.1.40)
   - [x] Tester soumission via /api/jobs (successful submission)
+
+## Phase 9: Cluster Expansion (DONE)
+
+- [x] Ajouter OnyxCortex (10.0.0.26) au cluster Ray
+  - [x] Ray worker container lancé avec ray:2.35.0-py312
+  - [x] GPU NVIDIA RTX 4070 SUPER (12GB VRAM) connectée
+  - [x] 16 CPU cores + 46GB RAM détectés par Ray
+  - [x] Mise à jour ARCHITECTURE.md avec specs OnyxCortex
+  - [x] Mise à jour DIAGRAM.md avec nouveau worker dans cluster
+  - [x] Prêt pour bone-ml training (Swin-T @1340×1340, batch=4)

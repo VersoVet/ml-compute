@@ -15,7 +15,9 @@ OnyxSoma (10.0.0.44:9469) — Head Node
 
 Workers distants (Docker rayproject/ray:2.35.0-py312, --network host)
 ├── OnyxPoint (10.0.0.86)
-│   └── GPU Worker (i5-10400, T1000 8GB, num_cpus=10, num_gpus=1, 23GB RAM)
+│   └── GPU Worker (i5-10400, NVIDIA T1000 8GB, num_cpus=10, num_gpus=1, 23GB RAM)
+├── OnyxCortex (10.0.0.26) — NEW
+│   └── GPU Worker (16-core i7-10700KF @ 3.8GHz, RTX 4070 SUPER 12GB, num_cpus=16, num_gpus=1, 46GB RAM, shm-size=10GB)
 ├── Glia (10.0.0.8)
 │   └── CPU Worker (2x Xeon E5-2630, num_cpus=20, 47GB RAM, --shm-size=20g)
 └── Axon (10.0.0.21)
