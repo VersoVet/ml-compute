@@ -14,9 +14,8 @@ from fastapi import FastAPI
 from pydantic import BaseModel
 import uvicorn
 
-# Add SAM module to path
-sys.path.insert(0, "/app")
-from deployment import SAMDeployment
+# Lazy import SAM to avoid libGL issues at startup
+SAMDeployment = None
 
 logging.basicConfig(
     level=logging.INFO,
@@ -50,7 +49,10 @@ async def startup():
     global sam_deployment
     try:
         logger.info("Initializing SAM deployment...")
-        sam_deployment = SAMDeployment()
+        # Lazy import SAM module to avoid libGL issues
+        sys.path.insert(0, "/app")
+        from deployment import SAMDeployment as SAMDepl
+        sam_deployment = SAMDepl()
         logger.info("✓ SAM initialized successfully")
     except Exception as e:
         logger.error(f"Failed to initialize SAM: {e}", exc_info=True)
