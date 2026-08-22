@@ -37,38 +37,46 @@ class SAMServeManager:
     async def deploy(self) -> bool:
         """Deploy SAM as Ray Serve deployment with GPU reservation.
 
-        Uses Python driver API to deploy SAMDeployment with num_gpus=1.
+        Uses Ray Dashboard REST API to deploy via ConfigFile API (no local Ray context needed).
         Ray automatically schedules on available GPU workers (OnyxCortex, OnyxPoint, etc).
 
         Returns:
             True if deployment succeeded, False otherwise.
         """
         try:
-            logger.info("Deploying SAM via Ray Serve (num_gpus=1)...")
+            logger.info("Deploying SAM via Ray Serve REST API (num_gpus=1)...")
 
-            # Import Ray Serve and deployment class
-            from ray import serve
+            # SAM Serve configuration via Ray Serve config file API
+            serve_config = {
+                "name": "SAM",
+                "deployments": [
+                    {
+                        "name": self.deployment_name,
+                        "class_path": "src.modules.sam.deployment:SAMDeployment",
+                        "num_replicas": 1,
+                        "max_replicas": 1,
+                        "ray_actor_options": {
+                            "num_gpus": 1,
+                            "memory": 2_000_000_000,
+                        },
+                        "route_prefix": f"/{self.deployment_name}",
+                    }
+                ],
+            }
 
-            from .deployment import SAMDeployment
-
-            # Apply the deployment decorator dynamically
-            SAMDeploymentServe = serve.deployment(
-                name=self.deployment_name,
-                ray_actor_options={
-                    "num_gpus": 1,
-                    "memory": 2_000_000_000,
-                },
-            )(SAMDeployment)
-
-            # Deploy to Ray Serve
-            serve.run(
-                SAMDeploymentServe.bind(),
-                name=self.deployment_name,
-                route_prefix=f"/{self.deployment_name}",
-            )
+            # Submit config via Ray Serve REST API (no Python context needed)
+            async with httpx.AsyncClient() as client:
+                # PUT config to Ray Serve controller
+                response = await client.put(
+                    f"{self.dashboard_url}/api/serve/config/",
+                    json=serve_config,
+                    timeout=HTTP_TIMEOUT,
+                )
+                response.raise_for_status()
+                logger.info(f"✓ SAM deployment config submitted to Ray Serve")
 
             self.is_deployed = True
-            logger.info(f"✓ SAM deployed at {self.endpoint} with num_gpus=1")
+            logger.info(f"✓ SAM deployment at {self.endpoint} with num_gpus=1")
             return True
 
         except Exception as e:
@@ -84,9 +92,20 @@ class SAMServeManager:
         try:
             logger.info("Undeploying SAM from Ray Serve...")
 
-            from ray import serve
+            # Submit empty config to remove SAM deployment
+            serve_config = {
+                "name": "SAM",
+                "deployments": [],  # Empty deployments list removes the app
+            }
 
-            serve.shutdown()
+            async with httpx.AsyncClient() as client:
+                response = await client.put(
+                    f"{self.dashboard_url}/api/serve/config/",
+                    json=serve_config,
+                    timeout=HTTP_TIMEOUT,
+                )
+                response.raise_for_status()
+                logger.info(f"✓ SAM deployment config cleared from Ray Serve")
 
             self.is_deployed = False
             logger.info("✓ SAM undeployed, GPU freed")
