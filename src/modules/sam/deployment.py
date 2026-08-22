@@ -18,11 +18,7 @@ import logging
 import os
 from typing import Any
 
-import cv2
-import numpy as np
-from PIL import Image
 from ray import serve
-from segment_anything import SamPredictor, sam_model_registry
 
 logger = logging.getLogger(__name__)
 
@@ -37,6 +33,12 @@ class SAMDeployment:
 
     def __init__(self):
         """Initialize SAM model on GPU."""
+        # Lazy imports (only when Ray Serve deploys this actor)
+        import cv2
+        import numpy as np
+        from PIL import Image
+        from segment_anything import SamPredictor, sam_model_registry
+
         model_path = os.path.expanduser("~/sam-gpu/sam_vit_b_01ec64.pth")
         if not os.path.exists(model_path):
             raise FileNotFoundError(f"SAM model not found at {model_path}")
@@ -69,12 +71,15 @@ class SAMDeployment:
                 - low_res_logits: low resolution logits for refinement
         """
         try:
+            import base64
+            import cv2
+            import numpy as np
+            from PIL import Image
+
             # Decode image
             image_data = payload.get("image")
             if isinstance(image_data, str):
                 # base64 string
-                import base64
-
                 image_bytes = base64.b64decode(image_data)
                 image = np.array(Image.open(io.BytesIO(image_bytes)))
             else:
@@ -125,6 +130,7 @@ class SAMDeployment:
 
             # Encode mask as base64
             import base64
+            import numpy as np
 
             mask_uint8 = (mask * 255).astype(np.uint8)
             _, encoded = cv2.imencode(".png", mask_uint8)
