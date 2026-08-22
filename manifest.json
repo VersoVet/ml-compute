@@ -1,6 +1,6 @@
 {
   "name": "ml-compute",
-  "version": "0.1.44",
+  "version": "0.1.45",
   "core": {
     "type": "docker",
     "display_name": "ML Compute",
