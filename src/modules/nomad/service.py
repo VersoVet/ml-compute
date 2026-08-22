@@ -109,13 +109,13 @@ class NomadManager:
                 response.raise_for_status()
                 job_data = response.json()
 
-            # Get allocations
-            alloc_response = await client.get(
-                f"{self.nomad_url}/v1/job/{job_id}/allocations",
-                timeout=NOMAD_TIMEOUT,
-            )
-            alloc_response.raise_for_status()
-            alloc_data = alloc_response.json() or []
+                # Get allocations (within same client context)
+                alloc_response = await client.get(
+                    f"{self.nomad_url}/v1/job/{job_id}/allocations",
+                    timeout=NOMAD_TIMEOUT,
+                )
+                alloc_response.raise_for_status()
+                alloc_data = alloc_response.json() or []
 
             allocations = [
                 AllocationStatus(
@@ -190,7 +190,7 @@ class NomadManager:
 
                 nodes_ready = sum(1 for n in nodes_data if n.get("Status") == "ready")
 
-                # Get jobs
+                # Get jobs (within same client context)
                 jobs_response = await client.get(
                     f"{self.nomad_url}/v1/jobs",
                     timeout=NOMAD_TIMEOUT,
@@ -244,7 +244,7 @@ class NomadManager:
                     node_id = node.get("ID")
                     node_name = node.get("Name")
 
-                    # Get node details for GPU detection
+                    # Get node details for GPU detection (within same client context)
                     node_detail = await client.get(
                         f"{self.nomad_url}/v1/node/{node_id}",
                         timeout=NOMAD_TIMEOUT,
