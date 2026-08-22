@@ -26,26 +26,35 @@ OnyxSoma (10.0.0.44) — Ray Head Node + ml-compute API
 
 ### Ray Workers (Exécution training)
 ```
-ML Workers (Docker rayproject/ray:2.35.0-py312, volumes NFS)
+ML Workers (Docker rayproject/ray:2.35.0-py312, NFS + Local storage)
 ├── OnyxCortex (10.0.0.26) — GPU Training ⚡⚡ (PRINCIPAL)
-│   └── Hardware: 16-core i7-10700KF, RTX 4070 SUPER 12GB, 46GB RAM
-│       Config: num_cpus=16, num_gpus=1, shm-size=10GB
-│       Usage: Bone-ml Dual-Head U-Net training (GPU-bound)
+│   ├── Hardware: 16-core i7-10700KF, RTX 4070 SUPER 12GB, 46GB RAM
+│   ├── Config: num_cpus=16, num_gpus=1, shm-size=10GB
+│   ├── Local Storage: /data/ml (916 GB SSD) ← Training I/O optimized
+│   │   ├── /data/ml/datasets   ← High-speed training data
+│   │   ├── /data/ml/models     ← Fast model checkpoint I/O
+│   │   ├── /data/ml/runs       ← Training outputs cache
+│   │   └── /data/ml/training-cache ← Intermediate results
+│   └── Usage: Bone-ml Dual-Head U-Net training (GPU-bound)
 │
 ├── Glia (10.0.0.8) — CPU Training ⚡ (FALLBACK)
-│   └── Hardware: 2x Xeon E5-2630, 20 cores, 47GB RAM
-│       Config: num_cpus=20, num_gpus=0, shm-size=20GB
-│       Usage: CPU-only jobs, fallback if Cortex busy
+│   ├── Hardware: 2x Xeon E5-2630, 20 cores, 47GB RAM
+│   ├── Config: num_cpus=20, num_gpus=0, shm-size=20GB
+│   └── Usage: CPU-only jobs, fallback if Cortex busy
 │
 └── OnyxPoint (10.0.0.86) — GPU Training (OPTIONNEL)
-    └── Hardware: i5-10400, NVIDIA T1000 8GB, 23GB RAM
-        Config: num_cpus=10, num_gpus=1, shm-size=8GB
-        Usage: Secondary GPU, inference, legacy workloads
+    ├── Hardware: i5-10400, NVIDIA T1000 8GB, 23GB RAM
+    ├── Config: num_cpus=10, num_gpus=1, shm-size=8GB
+    └── Usage: Secondary GPU, inference, legacy workloads
 ```
 
-**Tous les workers accèdent aux NFS volumes**:
-- `/mnt/ml-store` → datasets, models, runs (10.0.0.6:/srv/nas/ml)
-- `/mnt/bonestore` → images fluoroscopiques (10.0.0.52:/srv/bones)
+**Volumes accessibles aux Ray workers**:
+- **Local Storage (OnyxCortex only)**
+  - `/data/ml` → High-speed training storage (916 GB, direct I/O)
+  - Shareable via NFS to other skills for data transfer
+- **NFS Volumes (tous les workers)**
+  - `/mnt/ml-store` → datasets, models, runs (10.0.0.6:/srv/nas/ml)
+  - `/mnt/bonestore` → images fluoroscopiques read-only (10.0.0.52:/srv/bones)
 
 **Installation d'un nouveau worker**: Voir [INSTALLATION.md](./INSTALLATION.md#1-ray-worker-setup)
 

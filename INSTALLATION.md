@@ -179,6 +179,49 @@ sudo mount -t nfs 10.0.0.6:/srv/nas/ml /mnt/ml-store
 sudo mount -t nfs 10.0.0.52:/srv/bones /mnt/bonestore
 ```
 
+### 1.6 Local Storage for OnyxCortex (High-Speed Training)
+
+**OnyxCortex has dedicated local storage** `/data/ml` (916 GB SSD) for optimal training I/O performance.
+
+**Structure**:
+```bash
+/data/ml/
+├── datasets/         ← High-speed training data
+├── models/          ← Fast model checkpoint I/O
+├── runs/            ← Training outputs & logs
+└── training-cache/  ← Intermediate results
+```
+
+**Docker access**: Local storage is bind-mounted in Ray container:
+```bash
+-v /data/ml:/data/ml:rw
+```
+
+**Sharing via NFS** (pour que d'autres skills y accèdent):
+1. Install NFS server on OnyxCortex:
+   ```bash
+   sudo apt-get install nfs-kernel-server
+   ```
+
+2. Add to `/etc/exports`:
+   ```
+   /data/ml 10.0.0.0/24(rw,sync,no_root_squash,no_subtree_check)
+   ```
+
+3. Export and enable:
+   ```bash
+   sudo exportfs -ra
+   sudo systemctl enable nfs-server
+   sudo systemctl start nfs-server
+   ```
+
+4. Mount from other skills:
+   ```bash
+   sudo mount -t nfs 10.0.0.26:/data/ml /mnt/cortex-ml
+   ```
+
+**Usage**: Ray jobs on OnyxCortex get high-speed local I/O; other skills can pull/push training data via NFS.
+
 ---
 
 ## 2. Monitoring Exporters
