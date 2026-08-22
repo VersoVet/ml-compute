@@ -103,17 +103,19 @@ async def lifespan(app: FastAPI):
     await ray_client.connect()
 
     # Initialize OnyxClient (optional - non-blocking)
-    try:
-        onyx = OnyxClient(skill_name="ml-compute")
-        onyx.start()
-        # Pass client to modules for status publishing
-        from src.modules.jobs import routes as jobs_routes
-
-        jobs_routes.set_onyx(onyx)
-        logger.info("OnyxClient initialized")
-    except Exception as e:
-        logger.debug(f"OnyxClient initialization (optional): {e}")
-        onyx = None
+    # Temporarily disabled to debug Ray initialization issue
+    # try:
+    #     onyx = OnyxClient(skill_name="ml-compute")
+    #     onyx.start()
+    #     # Pass client to modules for status publishing
+    #     from src.modules.jobs import routes as jobs_routes
+    #
+    #     jobs_routes.set_onyx(onyx)
+    #     logger.info("OnyxClient initialized")
+    # except Exception as e:
+    #     logger.debug(f"OnyxClient initialization (optional): {e}")
+    #     onyx = None
+    onyx = None
 
     yield
 
