@@ -6,6 +6,7 @@ Handles starting/stopping SAM Ray Serve deployment to ensure:
 3. No resource contention on OnyxCortex
 """
 
+import asyncio
 import logging
 import subprocess
 import time
@@ -28,10 +29,12 @@ async def start_sam_serve(
         Dict with status, endpoint, message
     """
     try:
+        import httpx
+        from ray.job_submission import JobSubmissionClient
+
         logger.info(f"Starting SAM deployment on port {serve_port}")
 
         # Check if already running
-        import httpx
         async with httpx.AsyncClient() as client:
             try:
                 r = await client.get(f"http://10.0.0.44:{serve_port}/api/interact")
@@ -45,8 +48,6 @@ async def start_sam_serve(
                 pass  # Not running yet
 
         # Launch deployment as Ray Job (runs in background)
-        from ray.job_submission import JobSubmissionClient
-
         client = JobSubmissionClient(address=ray_address)
 
         job_id = client.submit_job(
@@ -140,9 +141,6 @@ async def get_sam_status(serve_port: int = 9470) -> dict[str, Any]:
     Returns:
         Dict with status, latency_ms
     """
-    import asyncio
-    import time
-
     try:
         import httpx
 
@@ -160,7 +158,7 @@ async def get_sam_status(serve_port: int = 9470) -> dict[str, Any]:
             else:
                 return {"status": "error", "http_status": r.status_code}
 
-    except asyncio.TimeoutError:
-        return {"status": "timeout", "message": "SAM not responding"}
-    except Exception as e:
+    except (asyncio.TimeoutError, Exception) as e:
+        if isinstance(e, asyncio.TimeoutError):
+            return {"status": "timeout", "message": "SAM not responding"}
         return {"status": "not_running", "message": str(e)}
