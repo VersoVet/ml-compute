@@ -18,18 +18,9 @@ import logging
 import os
 from typing import Any
 
-from ray import serve
-
 logger = logging.getLogger(__name__)
 
 
-@serve.deployment(
-    name="sam-vit-b",
-    ray_actor_options={
-        "num_gpus": 1,
-        "memory": 2_000_000_000,
-    },
-)
 class SAMDeployment:
     """SAM (Segment Anything Model) deployment for interactive segmentation."""
 

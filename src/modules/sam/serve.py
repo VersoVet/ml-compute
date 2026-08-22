@@ -46,14 +46,23 @@ class SAMServeManager:
         try:
             logger.info("Deploying SAM via Ray Serve (num_gpus=1)...")
 
-            # Import Ray Serve and deploy locally
+            # Import Ray Serve and deployment class
             from ray import serve
 
             from .deployment import SAMDeployment
 
-            # Deploy SAM with GPU reservation
+            # Apply the deployment decorator dynamically
+            SAMDeploymentServe = serve.deployment(
+                name=self.deployment_name,
+                ray_actor_options={
+                    "num_gpus": 1,
+                    "memory": 2_000_000_000,
+                },
+            )(SAMDeployment)
+
+            # Deploy to Ray Serve
             serve.run(
-                SAMDeployment.bind(),
+                SAMDeploymentServe.bind(),
                 name=self.deployment_name,
                 route_prefix=f"/{self.deployment_name}",
             )
