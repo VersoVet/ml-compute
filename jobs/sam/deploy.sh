@@ -4,7 +4,7 @@
 set -e
 
 NOMAD_ADDR=${NOMAD_ADDR:-http://10.0.0.26:4646}
-JOB_SPEC="$(dirname "$0")/sam_job_spec.json"
+JOB_SPEC="$(dirname "$0")/sam_job.hcl"
 IMAGE_NAME="sam-inference:v1"
 TIMEOUT=60
 
