@@ -12,9 +12,9 @@
           "name": "sam-inference",
           "driver": "docker",
           "config": {
-            "image": "nvidia/cuda:12.1.0-runtime-ubuntu22.04",
-            "command": "bash",
-            "args": ["-c", "apt-get update && apt-get install -y python3 python3-pip && pip install torch segment-anything fastapi uvicorn && python3 /app/sam_server.py"]
+            "image": "sam-inference:v1",
+            "command": "python3",
+            "args": ["/app/sam_server.py"]
           },
           "mounts": [
             {

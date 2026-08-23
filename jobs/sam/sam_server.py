@@ -16,6 +16,7 @@ import numpy as np
 import torch
 import uvicorn
 from fastapi import FastAPI, HTTPException
+from PIL import Image
 from pydantic import BaseModel
 
 # SAM imports
@@ -160,10 +161,8 @@ async def segment(request: SegmentationRequest) -> SegmentationResponse:
     try:
         # Decode image from base64
         image_data = base64.b64decode(request.image_base64)
-        image_array = np.array(io.BytesIO(image_data))
-
-        # TODO: Proper image decoding (PIL)
-        # For now, this is a placeholder
+        image = Image.open(io.BytesIO(image_data)).convert("RGB")
+        image_array = np.array(image)
 
         # Set image in SAM
         sam_predictor.set_image(image_array)

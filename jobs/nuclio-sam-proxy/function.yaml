@@ -1,0 +1,56 @@
+apiVersion: "nuclio.io/v1"
+kind: "NuclioFunction"
+metadata:
+  name: "sam-proxy"
+  namespace: "nuclio"
+  labels:
+    project: "ml-compute"
+    service: "sam-proxy"
+spec:
+  description: "Proxy for SAM segmentation to ml-compute backend"
+  runtime: "python:3.9"
+  handler: "model_handler:handler"
+  entrypoint: "model_handler.py"
+
+  # Resources
+  resources:
+    limits:
+      cpu: "2"
+      memory: "1Gi"
+    requests:
+      cpu: "500m"
+      memory: "256Mi"
+
+  # HTTP trigger
+  triggers:
+    http:
+      kind: "http"
+      maxWorkers: 4
+      attributes:
+        methods: ["POST"]
+        path: "/segment"
+
+  # Environment variables
+  env:
+    - name: SAM_BACKEND_URL
+      value: "http://10.0.0.44:9469/api/serve/sam/interact"
+
+  # Build options
+  build:
+    baseImage: "python:3.9-slim"
+    commands:
+      - pip install --upgrade pip setuptools wheel
+      - pip install -r requirements.txt
+    dependencies:
+      - requirements.txt
+      - model_handler.py
+
+  # Platform configuration (OnyxSynapse)
+  platform:
+    attributes:
+      function-sourceKind: "archive"
+      function-sourceURL: ""
+      readinessProbeRelaxedMode: true
+
+  # Monitoring
+  loggerLevel: "info"
