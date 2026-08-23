@@ -1,0 +1,25 @@
+{
+  "name": "sam-inference-001",
+  "job_type": "service",
+  "driver": "docker",
+  "image": "pytorch/pytorch:2.1-cuda12.1-runtime-ubuntu22.04",
+  "command": "python -c \"from segment_anything import sam_model_registry; print('SAM ready')\"",
+  "constraints": [
+    {
+      "task_name": "sam",
+      "cpu_mhz": 4000,
+      "memory_mb": 12288,
+      "num_gpus": 1
+    }
+  ],
+  "env_vars": {
+    "SAM_MODEL": "vit_b",
+    "SAM_PORT": "9470",
+    "CUDA_VISIBLE_DEVICES": "0",
+    "TORCH_HOME": "/models"
+  },
+  "volumes": {
+    "/mnt/ml-store/sam-models": "/models"
+  },
+  "timeout_seconds": 3600
+}

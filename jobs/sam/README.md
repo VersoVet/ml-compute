@@ -1,230 +1,112 @@
-# SAM (Segment Anything Model) Deployment via Docker
+# SAM (Segment Anything Model) Deployment via Nomad
 
-Deploy the Segment Anything Model (vit_b) on OnyxCortex GPU worker for interactive annotation with CVAT.
-
-## ⚠️ CRITICAL: GPU Resource Management
-
-**OnyxCortex has 1 GPU (RTX 4070 SUPER, 12GB VRAM)**. SAM reserves the GPU exclusively while running.
-
-- While SAM Docker container is running → GPU is 100% reserved, training jobs are BLOCKED
-- SAM must be explicitly stopped before launching training jobs
-- GPU becomes available for training only after SAM container stops
-
-**Strategy**: Deploy and stop SAM on-demand via Docker:
-1. **Annotation Phase**: Start SAM container, use for annotations
-2. **Training Phase**: Stop SAM, launch training jobs (GPU now free)
-
----
-
-## Quick Start
-
-### Prerequisites
-
-- OnyxCortex machine with GPU (RTX 4070 SUPER)
-- SAM model weights: `~/sam-gpu/sam_vit_b_01ec64.pth` (375MB)
-- Docker and NVIDIA Container Toolkit installed
-- ml-compute skill deployed on OnyxSoma (10.0.0.44:9469)
-
-**NOT recommended for OnyxPoint**: T1000 8GB is insufficient (~10GB required for SAM vit_b)
-
-### Build and Deploy
-
-```bash
-# On OnyxCortex (10.0.0.26):
-cd /opt/onyx/skills/ml-compute
-bash docker/build_and_run_sam.sh
-```
-
-The script will:
-1. Build `onyx/sam:latest` Docker image
-2. Start SAM container on port 9470
-3. Mount GPU and NFS volumes
-4. Verify health check
-
-### Verify SAM is Running
-
-```bash
-# Check container status
-docker ps | grep sam-service
-
-# Check health
-curl http://10.0.0.26:9470/health
-
-# Check readiness
-curl http://10.0.0.26:9470/ready
-```
-
----
-
-## Using SAM via ml-compute API
-
-Once SAM is running on OnyxCortex, access it through ml-compute proxy endpoints:
-
-### Check SAM Status
-
-```bash
-curl http://10.0.0.44:9469/api/serve/sam/status
-```
-
-Response:
-```json
-{
-  "status": "healthy",
-  "service": "sam-vit-b"
-}
-```
-
-### Get SAM Info
-
-```bash
-curl http://10.0.0.44:9469/api/serve/sam/info
-```
-
-Returns: model specs, GPU requirements, inference latency, and endpoints.
-
-### Interactive Segmentation
-
-```bash
-curl -X POST http://10.0.0.44:9469/api/serve/sam/interact \
-  -H "Content-Type: application/json" \
-  -d '{
-    "image": "base64_encoded_image",
-    "positive_points": [[100, 100], [200, 200]],
-    "negative_points": [[150, 150]]
-  }'
-```
-
-Response:
-```json
-{
-  "mask": "base64_encoded_png_mask",
-  "area": 12345,
-  "status": "success",
-  "image_shape": [1080, 1920, 3]
-}
-```
-
----
-
-## Docker Container Management
-
-### Stop SAM (Free GPU)
-
-```bash
-docker stop sam-service
-```
-
-### Restart SAM
-
-```bash
-docker start sam-service
-```
-
-### Remove SAM (Complete Cleanup)
-
-```bash
-docker rm -f sam-service
-docker rmi onyx/sam:latest
-```
-
-### View Logs
-
-```bash
-docker logs -f sam-service
-```
-
----
-
-## Performance Characteristics
-
-| Metric | Value |
-|--------|-------|
-| Container startup time | ~30s (includes pip install first time) |
-| Model load time | ~2-3 seconds |
-| Inference latency | 500-1000ms per prediction |
-| Max batch size | 1 (single image) |
-| Memory peak | ~10-11 GB during inference |
-| Recommended max image size | 1024x1024 |
-
----
-
-## Integration with CVAT
-
-CVAT Smart Tool can call SAM endpoint after container starts:
-
-```python
-# CVAT annotation plugin
-def get_mask_from_sam(image_base64, points_positive, points_negative):
-    import requests
-    
-    # Use ml-compute proxy
-    response = requests.post(
-        "http://10.0.0.44:9469/api/serve/sam/interact",
-        json={
-            "image": image_base64,
-            "positive_points": points_positive,
-            "negative_points": points_negative
-        },
-        timeout=5
-    )
-    
-    if response.status_code == 200:
-        return response.json()["mask"]
-    else:
-        raise RuntimeError("SAM not available")
-```
-
----
-
-## Troubleshooting
-
-### SAM container won't start
-
-```bash
-# Check logs
-docker logs sam-service
-
-# Verify GPU access
-docker exec sam-service nvidia-smi
-
-# Rebuild from scratch
-docker rm -f sam-service
-bash docker/build_and_run_sam.sh
-```
-
-### ml-compute proxy returns "unhealthy"
-
-```bash
-# Verify OnyxCortex is accessible
-curl http://10.0.0.26:9470/health
-
-# Check ml-compute logs
-docker logs ml-compute
-```
-
-### Training job still PENDING while SAM runs
-
-**This is expected!** SAM has exclusive GPU access. Stop SAM first:
-
-```bash
-docker stop sam-service
-# Training will start immediately
-```
-
----
+SAM est un modèle d'inférence deep learning pour segmentation automatique d'images. Il est déployé en tant que job Nomad avec **réservation GPU exclusive** pour éviter les conflits avec les jobs Ray training.
 
 ## Architecture
 
 ```
-CVAT / User Interface
-        ↓
-ml-compute (OnyxSoma:9469)
-    ↓ proxy request
-SAM Docker Service (OnyxCortex:9470)
-    ↓ forward
-SAM Model (PyTorch, GPU)
+User Submit SAM Request
+  ↓
+ml-compute API (/api/serve/sam/interact)
+  ↓
+Check GPU availability via Nomad
+  ├─ If GPU free → allocate + start SAM Docker
+  └─ If GPU busy → queue or reject
+  ↓
+SAM runs with exclusive GPU access
+  ↓
+Return segmentation mask to user
+  ↓
+Release GPU via Nomad
 ```
 
-- **ml-compute**: Central orchestrator with SAM proxy routes
-- **SAM Docker**: Lightweight service on GPU machine
-- **GPU isolation**: Docker + NVIDIA runtime ensures exclusive GPU access
+## Submission via Nomad API
+
+### Option 1: Direct Nomad Job Submission
+
+```bash
+curl -X POST http://10.0.0.44:9469/api/nomad/jobs/submit \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "sam-inference",
+    "job_type": "service",
+    "driver": "docker",
+    "image": "pytorch/pytorch:2.1-cuda12.1-runtime-ubuntu22.04",
+    "command": "python -c \"import torch; print(torch.cuda.is_available())\"",
+    "constraints": [
+      {
+        "task_name": "sam",
+        "cpu_mhz": 4000,
+        "memory_mb": 12288,
+        "num_gpus": 1
+      }
+    ],
+    "env_vars": {
+      "CUDA_VISIBLE_DEVICES": "0"
+    }
+  }'
+```
+
+### Option 2: Via ml-compute SAM Routes (Future)
+
+Routes SAM géreront automatiquement coordination Nomad:
+
+```bash
+POST /api/serve/sam/start     # Start with GPU reservation
+POST /api/serve/sam/interact  # Run inference
+POST /api/serve/sam/stop      # Stop + release GPU
+```
+
+## Ressources Requises
+
+| Ressource | Valeur |
+|-----------|--------|
+| GPU | 1x (12GB min) — SAM ViT-B |
+| CPU | 4 cores |
+| RAM | 12 GB |
+
+**Supported GPUs**:
+- ✓ OnyxCortex: RTX 4070 SUPER 12GB — RECOMMANDÉ
+- ⚠ OnyxPoint: T1000 8GB — Possible mais risqué (OOM)
+- ✗ Glia: CPU-only — Not supported
+
+## Coordination avec Ray Training
+
+```
+SAM active (GPU reserved)
+  ↓ Ray job soumis?
+  ├─ OnyxCortex GPU: BUSY (SAM)
+  ├─ OnyxPoint GPU: FREE → allouer job là
+  └─ Glia CPU: FREE → allouer job CPU
+  
+Ray training finit
+  ↓ Prochaine requête SAM?
+  └─ GPU libre → allocation OK
+```
+
+## Testing
+
+```bash
+# Check GPU availability before submitting
+curl http://10.0.0.44:9469/api/nomad/gpu-status
+
+# Submit simple test job (no GPU)
+curl -X POST http://10.0.0.44:9469/api/nomad/jobs/submit \
+  -d '{
+    "name": "test-sam",
+    "image": "ubuntu:22.04",
+    "command": "echo SAM test",
+    "constraints": [{"task_name": "t", "cpu_mhz": 500, "memory_mb": 256, "num_gpus": 0}]
+  }' | jq .job_id
+
+# Check job status
+curl http://10.0.0.44:9469/api/nomad/jobs/<job-id>
+```
+
+## Next: SAM Integration Workflow
+
+1. ✓ Nomad cluster ready (GPU coordination)
+2. ✓ API endpoints for job management
+3. → Update SAM routes to use Nomad
+4. → Test SAM + Ray training parallel execution
+5. → Monitor via Prometheus
