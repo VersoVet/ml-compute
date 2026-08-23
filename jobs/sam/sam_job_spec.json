@@ -27,12 +27,11 @@
                 "source": "/opt/onyx/skills/ml-compute/jobs/sam"
               }
             ],
-            "port_map": [
-              {
-                "label": "http",
-                "value": 9470
+            "ports": {
+              "http": {
+                "static": 9470
               }
-            ]
+            }
           },
           "env": {
             "SAM_MODEL": "vit_b",
