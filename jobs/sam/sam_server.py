@@ -214,6 +214,12 @@ async def interact(request: SegmentationRequest) -> SegmentationResponse:
     return await _segment_impl(request)
 
 
+@app.get("/test-endpoint-2fd7d5c9f1c5")
+async def test_endpoint() -> dict[str, str]:
+    """Test endpoint to verify Docker image contains latest code."""
+    return {"message": "TEST ENDPOINT WORKING - Image has latest code"}
+
+
 @app.get("/info")
 async def info() -> dict[str, Any]:
     """Get server information."""
