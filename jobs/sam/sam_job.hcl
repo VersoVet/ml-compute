@@ -6,6 +6,11 @@ job "sam-inference" {
   group "sam" {
     count = 1
 
+    constraint {
+      attribute = "${node.hostname}"
+      value     = "onyxcortex"
+    }
+
     task "sam-inference" {
       driver = "docker"
 

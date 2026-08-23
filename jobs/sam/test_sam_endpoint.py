@@ -54,7 +54,7 @@ def test_segmentation_dummy():
     request_data = {
         "image_base64": create_dummy_image(),
         "points": [[0, 0]],
-        "negative_points": None,
+        "negative_points": [],
         "box": None,
     }
 
