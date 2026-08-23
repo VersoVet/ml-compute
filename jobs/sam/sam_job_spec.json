@@ -12,9 +12,9 @@
           "name": "sam-inference",
           "driver": "docker",
           "config": {
-            "image": "pytorch/pytorch:2.1-cuda12.1-runtime-ubuntu22.04",
-            "command": "python",
-            "args": ["-c", "import torch; print(f'CUDA: {torch.cuda.is_available()}'); print(f'GPUs: {torch.cuda.device_count()}'); import sys; sys.stdout.flush(); import time; time.sleep(3600)"]
+            "image": "ubuntu:22.04",
+            "command": "/bin/bash",
+            "args": ["-c", "echo 'GPU Test Container'; nvidia-smi 2>/dev/null || echo 'NVIDIA GPU not available'; sleep 3600"]
           },
           "resources": {
             "cpu": 4000,
