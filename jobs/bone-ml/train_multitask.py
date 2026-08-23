@@ -109,9 +109,9 @@ async def fetch_validated_annotations(
 
         sources = [s.strip() for s in source_filter.split(",")]
         query = """
-            SELECT fa.id, fa.image_id, fa.zones, fa.landmarks
+            SELECT fa.frame_filename, fa.annotation_type, fa.label, fa.data
             FROM frame_annotations fa
-            JOIN annotation_tasks t ON fa.task_id = t.id
+            JOIN annotation_tasks t ON fa.acquisition_id = t.acquisition_id
             WHERE t.status = 'validated' AND t.bone_type = $1
             AND fa.source = ANY($2)
         """
