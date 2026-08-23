@@ -158,6 +158,34 @@
   - [ ] Créer dashboards Grafana personnalisés (Ray metrics + Nomad metrics)
   - [ ] Configurer alertes Prometheus
 
+## Phase 12: SAM Nomad Integration & Monitoring Deployment (DONE)
+
+### 1. NVIDIA GPU Device Plugin Installation (DONE)
+- [x] Créer guide d'installation GPU_PLUGIN_SETUP.md
+- [x] Créer script install-gpu-plugin.sh pour configuration Nomad
+- [x] Documenter procédure pour OnyxCortex (RTX 4070) et OnyxPoint (T1000)
+- [ ] Exécuter sur workers (nécessite accès SSH root)
+
+### 2. SAM Nomad Integration (DONE)
+- [x] Créer SAM FastAPI server (sam_server.py) avec model inference
+- [x] Créer Nomad job spec pour SAM deployment (sam_job_spec.json)
+- [x] Intégrer SAM manager avec Nomad API (deploy/status/undeploy)
+- [x] Endpoints SAM: POST /deploy, GET /status, DELETE /undeploy
+- [x] Mettre à jour serve_proxy pour utiliser Nomad backend
+- [x] Documentation SAM deployment (jobs/sam/README.md)
+- [x] DIAGRAM.md avec architecture Nomad + Ray
+
+### 3. Monitoring Prometheus + Grafana (IN PROGRESS)
+- [x] Configuration Prometheus avec scrape Nomad metrics
+- [x] Docker Compose stack (Prometheus :9090, Grafana :3000)
+- [x] Grafana data source provisioning
+- [x] Script de déploiement deploy-monitoring.sh
+- [ ] Déployer stack sur OnyxSoma (en cours)
+- [ ] Installer Node Exporter sur workers
+- [ ] Installer NVIDIA GPU Exporter sur workers GPU
+- [ ] Créer dashboards Grafana (Nomad + Ray)
+- [ ] Configurer alertes Prometheus
+
 ## Phase 9: Cluster Expansion & Architecture Clarification (DONE)
 
 - [x] Ajouter OnyxCortex (10.0.0.26) au cluster Ray
