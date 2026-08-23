@@ -141,8 +141,8 @@ class SegmentationResponse(BaseModel):
     """Segmentation response model."""
 
     status: str
-    masks: list[list[int]] | None = None  # RLE encoded masks
-    iou_predictions: list[float] | None = None
+    masks: Any | None = None  # Segmentation masks as lists
+    iou_predictions: Any | None = None  # IOU prediction scores
 
 
 async def _segment_impl(request: SegmentationRequest) -> SegmentationResponse:
@@ -191,10 +191,22 @@ async def _segment_impl(request: SegmentationRequest) -> SegmentationResponse:
                 detail="No prompts provided (points or box required)",
             )
 
+        # Convert numpy arrays to native Python types using tolist()
+        # This ensures full compatibility with JSON serialization
+        masks_list = None
+        if masks is not None:
+            # SAM returns bool array, convert to int for JSON compatibility
+            masks_list = masks.astype(int).tolist()
+
+        iou_list = None
+        if iou_predictions is not None:
+            # Convert float array to list of native Python floats
+            iou_list = iou_predictions.tolist()
+
         return SegmentationResponse(
             status="success",
-            masks=(masks.astype(int).tolist() if masks is not None else None),
-            iou_predictions=(iou_predictions.astype(float).tolist() if iou_predictions is not None else None),
+            masks=masks_list,
+            iou_predictions=iou_list,
         )
 
     except Exception as e:
