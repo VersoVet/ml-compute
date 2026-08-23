@@ -1,45 +1,29 @@
-FROM nvidia/cuda:12.1.0-runtime-ubuntu22.04
+# syntax=docker/dockerfile:1
+# SAM Inference Server
+# Base: PyTorch 2.4.1 + CUDA 12.4 + cuDNN 9 + Python 3.11 pré-installés
+# Build time: ~2-3 min (vs 25+ min avec nvidia/cuda)
+FROM pytorch/pytorch:2.4.1-cuda12.4-cudnn9-runtime
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
-# Force rebuild - change this timestamp to invalidate cache
-# 2026-08-23 15:55:00 UTC
-ENV REBUILD_TIME="2026-08-23T15:55:00Z"
+COPY requirements.txt /tmp/requirements.txt
 
-# Install Python and system dependencies upfront
-RUN apt-get update && apt-get install -y \
-    python3 \
-    python3-pip \
-    git \
-    wget \
-    curl \
-    openssh-client \
-    && rm -rf /var/lib/apt/lists/*
+# BuildKit cache mount: pip téléchargé une seule fois sur la machine de build
+RUN --mount=type=cache,target=/root/.cache/pip \
+    pip install -r /tmp/requirements.txt
 
-# Increase memory limit for pip (important for large packages)
-ENV PIP_NO_CACHE_DIR=1
-
-# Install Python dependencies (pre-compiled)
-# Using latest versions compatible with NumPy 2.x
-RUN pip install --upgrade pip setuptools wheel && \
-    pip install "numpy<2.0" && \
-    pip install "torch==2.1.0" "torchvision==0.16.0" --index-url https://download.pytorch.org/whl/cu121 && \
-    pip install --upgrade "numpy<2.0" && \
-    pip install "segment-anything>=1.0" && \
-    pip install "fastapi" "uvicorn" "python-multipart" "pillow"
-
-# Copy SAM server code
-COPY sam_server.py /app/sam_server.py
-
-# Create model directory
 RUN mkdir -p /models
 
-# Expose port
+COPY sam_server.py /app/sam_server.py
+
 EXPOSE 9470
 
-# Health check
+# Healthcheck sur /ready (retourne 503 tant que le modèle charge)
 HEALTHCHECK --interval=30s --timeout=10s --start-period=90s --retries=3 \
-  CMD curl -f http://localhost:9470/health || exit 1
+    CMD curl -f http://localhost:9470/ready || exit 1
 
-# Run SAM server
 CMD ["python3", "/app/sam_server.py"]

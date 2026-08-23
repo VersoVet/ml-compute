@@ -11,8 +11,7 @@ SAM_PORT=${SAM_PORT:-9470}
 SAM_MODEL_PATH=${SAM_MODEL_PATH:-$HOME/sam-gpu}
 
 echo "=== Building SAM Docker Image ==="
-docker build -t "$IMAGE_NAME" \
-  --no-cache \
+DOCKER_BUILDKIT=1 docker build -t "$IMAGE_NAME" \
   -f "$SCRIPT_DIR/jobs/sam/Dockerfile" \
   "$SCRIPT_DIR/jobs/sam"
 
