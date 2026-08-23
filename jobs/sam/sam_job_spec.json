@@ -1,30 +1,59 @@
 {
   "name": "sam-inference",
-  "job_type": "service",
+  "type": "service",
   "priority": 75,
-  "driver": "docker",
-  "image": "pytorch/pytorch:2.1-cuda12.1-runtime-ubuntu22.04",
-  "command": "python",
-  "command_args": ["/app/sam_server.py"],
-  "constraints": [
+  "taskgroups": [
     {
-      "task_name": "sam-inference",
-      "cpu_mhz": 4000,
-      "memory_mb": 12288,
-      "num_gpus": 1
+      "name": "sam",
+      "count": 1,
+      "tasks": [
+        {
+          "name": "sam-inference",
+          "driver": "docker",
+          "config": {
+            "image": "pytorch/pytorch:2.1-cuda12.1-runtime-ubuntu22.04",
+            "command": "python",
+            "args": ["/app/sam_server.py"],
+            "mounts": [
+              {
+                "type": "bind",
+                "target": "/models",
+                "source": "/mnt/ml-store/sam-models"
+              },
+              {
+                "type": "bind",
+                "target": "/app",
+                "source": "/opt/onyx/skills/ml-compute/jobs/sam"
+              }
+            ],
+            "port_map": [
+              {
+                "label": "http",
+                "value": 9470
+              }
+            ]
+          },
+          "env": {
+            "SAM_MODEL": "vit_b",
+            "SAM_PORT": "9470",
+            "SAM_HOST": "0.0.0.0",
+            "CUDA_VISIBLE_DEVICES": "0",
+            "TORCH_HOME": "/models",
+            "PYTHONUNBUFFERED": "1"
+          },
+          "resources": {
+            "cpu": 4000,
+            "memory": 12288,
+            "devices": [
+              {
+                "name": "gpu",
+                "count": 1
+              }
+            ]
+          },
+          "timeout": "28800s"
+        }
+      ]
     }
-  ],
-  "env_vars": {
-    "SAM_MODEL": "vit_b",
-    "SAM_PORT": "9470",
-    "SAM_HOST": "0.0.0.0",
-    "CUDA_VISIBLE_DEVICES": "0",
-    "TORCH_HOME": "/models",
-    "PYTHONUNBUFFERED": "1"
-  },
-  "volumes": {
-    "/mnt/ml-store/sam-models": "/models",
-    "/home/onyx/projects/skills/ml-compute/jobs/sam": "/app"
-  },
-  "timeout_seconds": 28800
+  ]
 }
