@@ -12,10 +12,22 @@
           "name": "sam-inference",
           "driver": "docker",
           "config": {
-            "image": "ubuntu:22.04",
-            "command": "/bin/bash",
-            "args": ["-c", "echo 'GPU Test Container'; nvidia-smi 2>/dev/null || echo 'NVIDIA GPU not available'; sleep 3600"]
+            "image": "pytorch/pytorch:2.1-cuda12.1-runtime-ubuntu22.04",
+            "command": "python",
+            "args": ["/app/sam_server.py"]
           },
+          "mounts": [
+            {
+              "type": "bind",
+              "target": "/app",
+              "source": "/opt/onyx/skills/ml-compute/jobs/sam"
+            },
+            {
+              "type": "bind",
+              "target": "/models",
+              "source": "/mnt/ml-store/sam-models"
+            }
+          ],
           "resources": {
             "cpu": 4000,
             "memory": 12288,
