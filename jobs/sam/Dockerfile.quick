@@ -1,0 +1,6 @@
+# Quick rebuild: utilise sam-inference:v1 comme base et ajoute juste le code corrigé
+FROM sam-inference:v1
+
+COPY sam_server.py /app/sam_server.py
+
+CMD ["python3", "/app/sam_server.py"]
