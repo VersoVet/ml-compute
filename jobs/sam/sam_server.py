@@ -145,19 +145,8 @@ class SegmentationResponse(BaseModel):
     iou_predictions: list[float] | None = None
 
 
-@app.post("/segment")
-@app.post("/api/interact")
-async def segment(request: SegmentationRequest) -> SegmentationResponse:
-    """Segment image using SAM.
-
-    Exposed on both /segment and /api/interact for compatibility.
-
-    Args:
-        request: SegmentationRequest with image and prompts
-
-    Returns:
-        SegmentationResponse with masks and IoU predictions
-    """
+async def _segment_impl(request: SegmentationRequest) -> SegmentationResponse:
+    """Internal segmentation implementation."""
     if sam_predictor is None:
         raise HTTPException(status_code=503, detail="SAM model not loaded")
 
@@ -211,6 +200,18 @@ async def segment(request: SegmentationRequest) -> SegmentationResponse:
     except Exception as e:
         logger.error(f"Segmentation failed: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Segmentation failed: {str(e)}")
+
+
+@app.post("/segment")
+async def segment(request: SegmentationRequest) -> SegmentationResponse:
+    """Segment image using SAM via /segment endpoint."""
+    return await _segment_impl(request)
+
+
+@app.post("/api/interact")
+async def interact(request: SegmentationRequest) -> SegmentationResponse:
+    """Segment image using SAM via /api/interact endpoint (compatibility alias)."""
+    return await _segment_impl(request)
 
 
 @app.get("/info")
