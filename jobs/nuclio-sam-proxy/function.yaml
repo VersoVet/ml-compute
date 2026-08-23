@@ -8,9 +8,8 @@ metadata:
     service: "sam-proxy"
 spec:
   description: "Proxy for SAM segmentation to ml-compute backend"
-  runtime: "python:3.9"
+  runtime: "python:3.11"
   handler: "model_handler:handler"
-  entrypoint: "model_handler.py"
 
   # Resources
   resources:
@@ -37,13 +36,11 @@ spec:
 
   # Build options
   build:
-    baseImage: "python:3.9-slim"
+    path: "./"
+    baseImage: "python:3.11-slim"
     commands:
       - pip install --upgrade pip setuptools wheel
-      - pip install -r requirements.txt
-    dependencies:
-      - requirements.txt
-      - model_handler.py
+      - pip install requests>=2.31.0 numpy>=1.26.0
 
   # Platform configuration (OnyxSynapse)
   platform:
