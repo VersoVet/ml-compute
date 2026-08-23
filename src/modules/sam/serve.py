@@ -117,95 +117,44 @@ class SAMServeManager:
             return False
 
     async def get_status(self) -> dict[str, Any]:
-        """Get SAM Nomad job status.
+        """Get SAM container status.
 
-        Checks job state in Nomad and verifies SAM server health.
+        Directly checks SAM server health on OnyxCortex.
 
         Returns:
-            Status dict with job info, allocations, and health.
+            Status dict with health and endpoint.
         """
         try:
+            # SAM runs directly on OnyxCortex at port 9470 (not via Nomad)
+            sam_endpoint = "http://10.0.0.26:9470"
+            sam_health = None
+            is_healthy = False
+
             async with httpx.AsyncClient() as client:
-                # Get job status from Nomad
-                response = await client.get(
-                    f"{self.nomad_url}/v1/job/{self.job_name}",
-                    timeout=HTTP_TIMEOUT,
-                )
-
-                if response.status_code == 404:
-                    # Job doesn't exist
-                    return {
-                        "status": "not_deployed",
-                        "job_name": self.job_name,
-                        "job_status": "unknown",
-                        "is_deployed": False,
-                    }
-
-                response.raise_for_status()
-                job_data = response.json()
-                job_status = job_data.get("Status", "unknown")
-
-                # Get allocations
-                alloc_response = await client.get(
-                    f"{self.nomad_url}/v1/job/{self.job_name}/allocations",
-                    timeout=HTTP_TIMEOUT,
-                )
-                allocations = alloc_response.json() if alloc_response.status_code == 200 else []
-
-                # Find a running allocation
-                running_alloc = None
-                for alloc in allocations:
-                    if alloc.get("ClientStatus") == "running":
-                        running_alloc = alloc
-                        self.allocation_id = alloc.get("ID")
-                        break
-
-                # Determine health and endpoint
-                sam_endpoint = None
-                sam_health = None
-                is_healthy = False
-
-                if running_alloc:
-                    # Try to get health from running SAM server
-                    node_id = running_alloc.get("NodeID")
-                    node_response = await client.get(
-                        f"{self.nomad_url}/v1/node/{node_id}",
-                        timeout=HTTP_TIMEOUT,
+                # Check SAM server health directly
+                try:
+                    health_response = await client.get(
+                        f"{sam_endpoint}/health",
+                        timeout=5.0,
                     )
-                    if node_response.status_code == 200:
-                        node_data = node_response.json()
-                        node_ip = node_data.get("HTTPAddr", "").split(":")[0]
-                        sam_endpoint = f"http://{node_ip}:{SAM_ENDPOINT_PORT}"
+                    if health_response.status_code == 200:
+                        sam_health = health_response.json().get("status", "unknown")
+                        is_healthy = sam_health in ("ok", "ready")
+                except Exception:
+                    sam_health = "unreachable"
 
-                        # Check SAM server health
-                        try:
-                            health_response = await client.get(
-                                f"{sam_endpoint}/health",
-                                timeout=5.0,
-                            )
-                            if health_response.status_code == 200:
-                                sam_health = health_response.json().get("status", "unknown")
-                                is_healthy = sam_health in ("ok", "ready")
-                        except Exception:
-                            sam_health = "unreachable"
-
-                return {
-                    "status": "deployed" if is_healthy else "pending" if job_status == "pending" else "unhealthy",
-                    "job_name": self.job_name,
-                    "job_status": job_status,
-                    "allocation_count": len(allocations),
-                    "running_allocation": running_alloc.get("ID") if running_alloc else None,
-                    "endpoint": sam_endpoint,
-                    "sam_health": sam_health,
-                    "is_deployed": is_healthy,
-                    "gpu_allocated": running_alloc.get("Resources", {}).get("Devices", []) if running_alloc else [],
-                }
+            return {
+                "status": "healthy" if is_healthy else "unhealthy",
+                "endpoint": sam_endpoint,
+                "sam_health": sam_health,
+                "is_deployed": is_healthy,
+            }
 
         except Exception as e:
             logger.debug(f"Failed to get status: {e}")
             return {
                 "status": "error",
-                "job_name": self.job_name,
+                "endpoint": "http://10.0.0.26:9470",
                 "error": str(e),
                 "is_deployed": False,
             }
