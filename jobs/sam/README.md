@@ -20,34 +20,78 @@ Return segmentation mask to user
 Release GPU via Nomad
 ```
 
-## Submission via Nomad API
+## Deployment via ml-compute API
 
-### Option 1: Direct Nomad Job Submission
+### 1. Deploy SAM Job
+
+```bash
+curl -X POST http://10.0.0.44:9469/api/serve/sam/deploy \
+  -H "Content-Type: application/json" \
+  -d '{
+    "action": "deploy"
+  }'
+```
+
+**Response** (success):
+```json
+{
+  "status": "deployed",
+  "message": "SAM job submitted to Nomad"
+}
+```
+
+### 2. Check SAM Status
+
+```bash
+curl http://10.0.0.44:9469/api/serve/sam/status
+```
+
+**Response** (when running):
+```json
+{
+  "status": "deployed",
+  "job_name": "sam-inference",
+  "job_status": "running",
+  "allocation_count": 1,
+  "running_allocation": "...",
+  "endpoint": "http://10.0.0.26:9470",
+  "sam_health": "ok",
+  "is_deployed": true,
+  "gpu_allocated": [...]
+}
+```
+
+### 3. Submit Segmentation Request
+
+```bash
+curl -X POST http://10.0.0.44:9469/api/serve/sam/interact \
+  -H "Content-Type: application/json" \
+  -d '{
+    "image_base64": "...",
+    "points": [[100, 200], [150, 300]],
+    "negative_points": [[50, 50]]
+  }'
+```
+
+### 4. Stop SAM Job
+
+```bash
+curl -X DELETE http://10.0.0.44:9469/api/serve/sam/undeploy \
+  -H "Content-Type: application/json" \
+  -d '{
+    "action": "undeploy"
+  }'
+```
+
+## Direct Nomad Submission (Advanced)
+
+For advanced usage, submit directly to Nomad API:
 
 ```bash
 curl -X POST http://10.0.0.44:9469/api/nomad/jobs/submit \
   -H "Content-Type: application/json" \
-  -d '{
-    "name": "sam-inference",
-    "job_type": "service",
-    "driver": "docker",
-    "image": "pytorch/pytorch:2.1-cuda12.1-runtime-ubuntu22.04",
-    "command": "python -c \"import torch; print(torch.cuda.is_available())\"",
-    "constraints": [
-      {
-        "task_name": "sam",
-        "cpu_mhz": 4000,
-        "memory_mb": 12288,
-        "num_gpus": 1
-      }
-    ],
-    "env_vars": {
-      "CUDA_VISIBLE_DEVICES": "0"
-    }
-  }'
+  -d @sam_job_spec.json
 ```
-
-### Option 2: Via ml-compute SAM Routes (Future)
 
 Routes SAM géreront automatiquement coordination Nomad:
 

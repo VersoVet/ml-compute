@@ -1,12 +1,14 @@
 {
-  "name": "sam-inference-001",
+  "name": "sam-inference",
   "job_type": "service",
+  "priority": 75,
   "driver": "docker",
   "image": "pytorch/pytorch:2.1-cuda12.1-runtime-ubuntu22.04",
-  "command": "python -c \"from segment_anything import sam_model_registry; print('SAM ready')\"",
+  "command": "python",
+  "command_args": ["/app/sam_server.py"],
   "constraints": [
     {
-      "task_name": "sam",
+      "task_name": "sam-inference",
       "cpu_mhz": 4000,
       "memory_mb": 12288,
       "num_gpus": 1
@@ -15,11 +17,14 @@
   "env_vars": {
     "SAM_MODEL": "vit_b",
     "SAM_PORT": "9470",
+    "SAM_HOST": "0.0.0.0",
     "CUDA_VISIBLE_DEVICES": "0",
-    "TORCH_HOME": "/models"
+    "TORCH_HOME": "/models",
+    "PYTHONUNBUFFERED": "1"
   },
   "volumes": {
-    "/mnt/ml-store/sam-models": "/models"
+    "/mnt/ml-store/sam-models": "/models",
+    "/home/onyx/projects/skills/ml-compute/jobs/sam": "/app"
   },
-  "timeout_seconds": 3600
+  "timeout_seconds": 28800
 }

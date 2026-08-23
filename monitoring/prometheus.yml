@@ -16,6 +16,15 @@ alerting:
 rule_files: []
 
 scrape_configs:
+  # Nomad Cluster - GPU Resource Orchestration
+  - job_name: 'nomad-cluster'
+    static_configs:
+      - targets: ['10.0.0.44:4646']
+    scrape_interval: 15s
+    metrics_path: '/v1/metrics'
+    params:
+      format: ['prometheus']
+
   # Ray Head Node (OnyxSoma) - Orchestration
   - job_name: 'ray-head'
     static_configs:
