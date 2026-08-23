@@ -1,5 +1,5 @@
 job "sam-inference" {
-  datacenters = ["dc1"]
+  datacenters = ["onyx-dc"]
   type        = "service"
   priority    = 75
 
