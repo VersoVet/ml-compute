@@ -253,7 +253,7 @@ class NomadManager:
                     node_data = node_detail.json()
 
                     # Count GPUs from NodeResources.Devices
-                    devices = node_data.get("NodeResources", {}).get("Devices", [])
+                    devices = node_data.get("NodeResources", {}).get("Devices") or []
                     gpu_devices = [d for d in devices if d.get("Type") == "gpu"]
                     num_gpus = len(gpu_devices)
 
