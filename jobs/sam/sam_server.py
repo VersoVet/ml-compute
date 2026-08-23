@@ -145,6 +145,12 @@ class SegmentationResponse(BaseModel):
     iou_predictions: Any | None = None  # IOU prediction scores
 
 
+class EmbedRequest(BaseModel):
+    """Embedding request model."""
+
+    image: str  # Base64-encoded image
+
+
 async def _segment_impl(request: SegmentationRequest) -> SegmentationResponse:
     """Internal segmentation implementation."""
     if sam_predictor is None:
@@ -247,6 +253,33 @@ async def info() -> dict[str, Any]:
         ),
         "version": "1.0.0",
     }
+
+
+@app.post('/api/embed')
+async def embed(request: EmbedRequest) -> dict[str, str]:
+    """Get image embeddings for CVAT AI Tool integration."""
+    if sam_predictor is None:
+        raise HTTPException(status_code=503, detail="SAM not initialized")
+
+    try:
+        # Decode base64 image
+        buf = io.BytesIO(base64.b64decode(request.image))
+        image = Image.open(buf).convert('RGB')
+        image_array = np.array(image)
+
+        # Set image in SAM (internally transforms and encodes)
+        sam_predictor.set_image(image_array)
+
+        # Access cached embeddings after set_image()
+        features = sam_predictor.features
+
+        # Convert to bytes and encode
+        feat_np = features.cpu().numpy()
+        return {"blob": base64.b64encode(feat_np.tobytes()).decode()}
+
+    except Exception as e:
+        logger.error(f"Embedding failed: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Embedding failed: {str(e)}")
 
 
 if __name__ == "__main__":
