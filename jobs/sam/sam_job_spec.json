@@ -14,44 +14,18 @@
           "config": {
             "image": "pytorch/pytorch:2.1-cuda12.1-runtime-ubuntu22.04",
             "command": "python",
-            "args": ["/app/sam_server.py"],
-            "mounts": [
-              {
-                "type": "bind",
-                "target": "/models",
-                "source": "/mnt/ml-store/sam-models"
-              },
-              {
-                "type": "bind",
-                "target": "/app",
-                "source": "/opt/onyx/skills/ml-compute/jobs/sam"
-              }
-            ],
-            "ports": {
-              "http": {
-                "static": 9470
-              }
-            }
-          },
-          "env": {
-            "SAM_MODEL": "vit_b",
-            "SAM_PORT": "9470",
-            "SAM_HOST": "0.0.0.0",
-            "CUDA_VISIBLE_DEVICES": "0",
-            "TORCH_HOME": "/models",
-            "PYTHONUNBUFFERED": "1"
+            "args": ["-c", "import torch; print(f'CUDA: {torch.cuda.is_available()}'); import sys; sys.stdout.flush(); import time; time.sleep(3600)"]
           },
           "resources": {
-            "cpu": 4000,
-            "memory": 12288,
+            "cpu": 2000,
+            "memory": 4096,
             "devices": [
               {
                 "name": "gpu",
                 "count": 1
               }
             ]
-          },
-          "timeout": "28800s"
+          }
         }
       ]
     }
