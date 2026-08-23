@@ -2,6 +2,10 @@ FROM nvidia/cuda:12.1.0-runtime-ubuntu22.04
 
 WORKDIR /app
 
+# Force rebuild - change this timestamp to invalidate cache
+# 2026-08-23 15:05:00 UTC
+ENV REBUILD_TIME="2026-08-23T15:05:00Z"
+
 # Install Python and system dependencies upfront
 RUN apt-get update && apt-get install -y \
     python3 \
@@ -16,11 +20,11 @@ RUN apt-get update && apt-get install -y \
 ENV PIP_NO_CACHE_DIR=1
 
 # Install Python dependencies (pre-compiled)
-# Using specific versions to avoid compilation and NumPy compatibility issues
+# Using latest versions compatible with NumPy 2.x
 RUN pip install --upgrade pip setuptools wheel && \
-    pip install "numpy<2.0" "torch==2.1.0" "torchvision==0.16.0" --index-url https://download.pytorch.org/whl/cu121 && \
-    pip install "segment-anything" "fastapi" "uvicorn" "python-multipart" "pillow" && \
-    pip install "numpy<2.0" --force-reinstall
+    pip install "torch==2.1.0" "torchvision==0.16.0" --index-url https://download.pytorch.org/whl/cu121 && \
+    pip install "segment-anything>=1.0" "numpy>=2.0" && \
+    pip install "fastapi" "uvicorn" "python-multipart" "pillow"
 
 # Copy SAM server code
 COPY sam_server.py /app/sam_server.py
