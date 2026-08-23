@@ -202,3 +202,48 @@
   - [x] OnyxPoint: Legacy/archive (available if needed)
   - [x] Mise à jour ARCHITECTURE.md avec clarification
   - [x] Mise à jour DIAGRAM.md avec separation nette
+
+## Phase 13: SAM OOM Fix + Nuclio Proxy (IN PROGRESS)
+
+### 1. SAM Nomad OOM Resolution (IN PROGRESS)
+- [ ] Résoudre SAM "OOM Killed" (exit code 137)
+  - [x] Identifier cause: pip install torch au runtime = 526 MB + décompression
+  - [x] Solution: Pré-compiler Dockerfile avec PyTorch + segment-anything
+  - [x] Créer Dockerfile optimisé (nvidia/cuda + pre-built wheels)
+  - [x] Corriger sam_server.py (image decoding via PIL)
+  - [x] Mettre à jour sam_job_spec.json (utiliser image locale)
+  - [ ] Build Docker en cours (~30-40 min) [ETA: ~20 min remaining]
+  - [ ] Déployer job Nomad (bash deploy.sh)
+  - [ ] Tester endpoint /api/serve/sam/health (curl)
+  - [ ] Valider segmentation via /api/serve/sam/interact
+
+### 2. Nuclio Proxy Deployment (READY)
+- [x] Créer fonction Nuclio pour proxy SAM
+  - [x] model_handler.py: Forward requêtes vers ml-compute
+  - [x] function.yaml: Configuration Nuclio (runtime, triggers)
+  - [x] requirements.txt: Dépendances (requests, numpy)
+  - [x] test_proxy.py: Suite de tests du proxy
+  - [x] README.md: Documentation déploiement + integration
+- [ ] Trouver/installer Nuclio sur OnyxSynapse
+  - [ ] Vérifier port Nuclio (8070, 9090, etc?)
+  - [ ] Si absent: installer Nuclio Docker container
+- [ ] Déployer fonction sam-proxy (nuctl deploy -f function.yaml)
+- [ ] Tester proxy: python3 test_proxy.py
+
+### 3. CVAT Integration (PLANNING)
+- [ ] Configurer SAM comme AI Tool dans CVAT
+  - [ ] Endpoint: http://10.0.0.59:9070/segment
+  - [ ] Method: POST
+  - [ ] Format: JSON (image_base64, points, etc)
+- [ ] Tester workflow CVAT → Nuclio → SAM
+- [ ] Documenter intégration (CVAT_INTEGRATION.md)
+
+### Fichiers Créés/Modifiés
+- [x] jobs/sam/Dockerfile (Pré-compilé PyTorch)
+- [x] jobs/sam/sam_server.py (Image decoding fix)
+- [x] jobs/sam/sam_job_spec.json (Image locale + python3)
+- [x] jobs/sam/deploy.sh (Script automation déploiement)
+- [x] jobs/sam/test_sam_endpoint.py (Tests endpoint SAM)
+- [x] jobs/nuclio-sam-proxy/* (Fonction Nuclio complète)
+- [x] jobs/DEPLOYMENT_PLAN.md (Timeline + checklist)
+- [x] jobs/CVAT_INTEGRATION.md (Guide d'intégration)
