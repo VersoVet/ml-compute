@@ -3,8 +3,8 @@ FROM nvidia/cuda:12.1.0-runtime-ubuntu22.04
 WORKDIR /app
 
 # Force rebuild - change this timestamp to invalidate cache
-# 2026-08-23 15:05:00 UTC
-ENV REBUILD_TIME="2026-08-23T15:05:00Z"
+# 2026-08-23 15:55:00 UTC
+ENV REBUILD_TIME="2026-08-23T15:55:00Z"
 
 # Install Python and system dependencies upfront
 RUN apt-get update && apt-get install -y \
