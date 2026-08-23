@@ -252,10 +252,10 @@ class NomadManager:
                     node_detail.raise_for_status()
                     node_data = node_detail.json()
 
-                    # Count GPUs (placeholder - requires device plugin or fingerprint)
-                    attributes = node_data.get("Attributes", {})
-                    # TODO: Parse GPU info from attributes once device plugin is active
-                    num_gpus = 1 if "gpu" in str(attributes).lower() else 0
+                    # Count GPUs from NodeResources.Devices
+                    devices = node_data.get("NodeResources", {}).get("Devices", [])
+                    gpu_devices = [d for d in devices if d.get("Type") == "gpu"]
+                    num_gpus = len(gpu_devices)
 
                     statuses.append(
                         GPUStatus(
