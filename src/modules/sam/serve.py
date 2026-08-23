@@ -233,7 +233,7 @@ class SAMServeManager:
 
             async with httpx.AsyncClient() as client:
                 response = await client.post(
-                    f"{sam_endpoint}/api/interact",
+                    f"{sam_endpoint}/segment",
                     json=payload,
                     timeout=HTTP_TIMEOUT,
                 )

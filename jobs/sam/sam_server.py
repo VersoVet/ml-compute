@@ -146,8 +146,11 @@ class SegmentationResponse(BaseModel):
 
 
 @app.post("/segment")
+@app.post("/api/interact")
 async def segment(request: SegmentationRequest) -> SegmentationResponse:
     """Segment image using SAM.
+
+    Exposed on both /segment and /api/interact for compatibility.
 
     Args:
         request: SegmentationRequest with image and prompts
