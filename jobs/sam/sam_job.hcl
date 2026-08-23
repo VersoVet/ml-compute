@@ -6,9 +6,12 @@ job "sam-inference" {
   group "sam" {
     count = 1
 
-    constraint {
-      attribute = "${node.hostname}"
+    # Affinity (préférence soft) au lieu de constraint stricte
+    # Permet au job de s'exécuter ailleurs si nécessaire
+    affinity {
+      attribute = "${node.Name}"
       value     = "onyxcortex"
+      weight    = 100  # Préfère OnyxCortex
     }
 
     task "sam-inference" {
@@ -19,17 +22,9 @@ job "sam-inference" {
         command = "python3"
         args    = ["/app/sam_server.py"]
 
-        mount {
-          type   = "bind"
-          target = "/app"
-          source = "/opt/onyx/skills/ml-compute/jobs/sam"
-        }
-
-        mount {
-          type   = "bind"
-          target = "/models"
-          source = "/mnt/ml-store/sam-models"
-        }
+        # sam_server.py est déjà COPY dans l'image
+        # Les volumes bind mounts ne sont pas supportés par ce driver Nomad
+        # Donc on utilise juste les chemins standard dans l'image
       }
 
       resources {
