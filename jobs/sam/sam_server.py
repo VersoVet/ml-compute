@@ -193,8 +193,8 @@ async def _segment_impl(request: SegmentationRequest) -> SegmentationResponse:
 
         return SegmentationResponse(
             status="success",
-            masks=masks.tolist() if masks is not None else None,
-            iou_predictions=iou_predictions.tolist() if iou_predictions is not None else None,
+            masks=(masks.astype(int).tolist() if masks is not None else None),
+            iou_predictions=(iou_predictions.astype(float).tolist() if iou_predictions is not None else None),
         )
 
     except Exception as e:

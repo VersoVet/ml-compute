@@ -22,8 +22,10 @@ ENV PIP_NO_CACHE_DIR=1
 # Install Python dependencies (pre-compiled)
 # Using latest versions compatible with NumPy 2.x
 RUN pip install --upgrade pip setuptools wheel && \
+    pip install "numpy<2.0" && \
     pip install "torch==2.1.0" "torchvision==0.16.0" --index-url https://download.pytorch.org/whl/cu121 && \
-    pip install "segment-anything>=1.0" "numpy>=2.0" && \
+    pip install --upgrade "numpy<2.0" && \
+    pip install "segment-anything>=1.0" && \
     pip install "fastapi" "uvicorn" "python-multipart" "pillow"
 
 # Copy SAM server code
