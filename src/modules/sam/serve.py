@@ -31,8 +31,10 @@ class SAMServeManager:
         """
         self.nomad_url = nomad_url
         self.job_name = SAM_JOB_NAME
+        self.deployment_name = SAM_JOB_NAME  # For compatibility with routes
         self.is_deployed = False
         self.allocation_id: str | None = None
+        self.endpoint = f"http://localhost:{SAM_ENDPOINT_PORT}"  # Nomad allocates port
 
     async def deploy(self) -> bool:
         """Deploy SAM on Nomad with exclusive GPU allocation.
