@@ -115,20 +115,37 @@
   - [x] `routes.py`: Endpoints `/api/nomad/*` (status, submit, stop, gpu-status)
 - [x] Intégrer Nomad dans `main.py` (lifespan connect/disconnect, router inclusion)
 - [x] Mettre à jour ARCHITECTURE.md (sections Nomad + GPU coordination)
-- [x] Valider et déployer ml-compute v0.1.54
+- [x] Valider et déployer ml-compute v0.1.58
 - [x] Vérifier cluster Nomad (3 nœuds ready, 2 GPUs détectées)
 
 ### Endpoints Working
 - `GET /api/nomad/status` → Cluster status (3 nodes, 2 GPUs)
 - `POST /api/nomad/jobs/submit` → Submit job with GPU reservation
 - `GET /api/nomad/gpu-status` → Per-node GPU allocation
+- `GET /api/nomad/jobs/{job_id}` → Job status + allocations
+- `POST /api/nomad/jobs/{job_id}/stop` → Stop job + cleanup
 
-### Next: GPU Device Plugin
-- [ ] Installer NVIDIA GPU device plugin pour Nomad (fingerprinting GPU automatique)
-- [ ] Intégrer SAM job spec pour allocation GPU exclusive
-- [ ] Tester conflit prévention (SAM + Ray training simultanés)
+## Phase 10.5: SAM + Monitoring Implementation (DONE)
 
-## Phase 11: Monitoring Infrastructure (TODO)
+### SAM Nomad Job Template
+- [x] Créer jobs/sam/ avec documentation complète
+- [x] Créer sam_job_spec.json (template job Nomad)
+- [x] Documentation SAM deployment, ressources requises, performance
+
+### Monitoring Infrastructure
+- [x] MONITORING_SETUP.md (guide complet installation Prometheus + Grafana)
+- [x] Prometheus scrape config Nomad cluster metrics
+- [x] Alert rules (GPU conflicts, job failures, hardware errors)
+- [x] Grafana dashboard templates
+- [x] monitor_nomad.py (CLI monitoring script avec conflict detection)
+
+### Status
+- ✓ SAM ready for Nomad deployment
+- ✓ Monitoring infrastructure documented
+- ✓ GPU conflict detection implemented in script
+- ✓ Prometheus + Grafana stack ready to deploy
+
+## Phase 11: Monitoring Infrastructure Deployment (TODO)
 
 - [ ] Installer Prometheus + Grafana stack
   - [x] Configuration Prometheus (prometheus.yml)
