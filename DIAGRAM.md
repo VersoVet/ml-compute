@@ -1,40 +1,77 @@
 # ml-compute - Architecture Diagram
 
-## Ray Cluster Architecture
+## Nomad + Ray Hybrid Architecture
 
 ```mermaid
 graph TB
-    subgraph Soma["OnyxSoma (10.0.0.44) — Administration"]
-        API["FastAPI Wrapper<br/>:9469<br/>OnyxClient"]
-        RayHead["Ray Head Node<br/>:6380 GCS<br/>:8265 Dashboard<br/>:8000 Serve<br/>Orchestration Only"]
+    subgraph Soma["OnyxSoma (10.0.0.44) — Orchestration & Admin"]
+        API["FastAPI API<br/>:9469<br/>OnyxClient"]
+        RayHead["Ray Head Node<br/>:6380 GCS<br/>:8265 Dashboard<br/>Orchestration Only"]
+        NomadHead["Nomad Server<br/>:4646 API<br/>GPU Resource Mgmt<br/>Job Scheduling"]
         API ---|Ray Client| RayHead
+        API ---|Nomad API| NomadHead
     end
 
-    subgraph MLWorkers["ML Workers (Ray Cluster)"]
-        Cortex["OnyxCortex (10.0.0.26) ⚡<br/>GPU: i7-10700KF 16-core<br/>RTX 4070 SUPER 12GB VRAM<br/>46GB RAM, shm-size=10GB<br/>num_cpus=16, num_gpus=1<br/>→ bone-ml training (Swin-T)"]
-        Glia["Glia (10.0.0.8)<br/>CPU: 2x Xeon E5-2630<br/>num_cpus=20, 47GB RAM<br/>shm-size=20GB<br/>→ CPU jobs + fallback"]
+    subgraph NomadWorkers["Nomad Workers (GPU Orchestration)"]
+        Cortex["OnyxCortex (10.0.0.26) ⚡<br/>Nomad Client<br/>GPU: RTX 4070 SUPER 12GB<br/>i7-10700KF 16-core, 46GB RAM<br/>→ SAM via Nomad (exclusive GPU)<br/>→ bone-ml training via Ray"]
+        OP["OnyxPoint (10.0.0.86) ⚡<br/>Nomad Client<br/>GPU: T1000 8GB<br/>i5-10400, 32GB RAM<br/>→ Fallback SAM / YOLO training"]
+    end
+
+    subgraph RayWorkers["Ray Workers (ML Compute)"]
+        Glia["Glia (10.0.0.8) 💾<br/>Ray Worker<br/>CPU: 2x Xeon E5-2630<br/>num_cpus=20, 47GB RAM<br/>→ CPU-only jobs"]
     end
 
     subgraph Infrastructure["Infrastructure Services"]
-        Axon["Axon (10.0.0.21)<br/>Grobid (PDF extraction)<br/>Ollama (Embeddings)"]
-        OP["OnyxPoint (10.0.0.86)<br/>Legacy/Archive<br/>i5-10400, T1000 8GB"]
+        Axon["Axon (10.0.0.21)<br/>Grobid, Ollama, etc."]
     end
 
-    RayHead -->|ray start --address:6380| Cortex
-    RayHead -->|ray start --address:6380| Glia
+    NomadHead -->|nomad client| Cortex
+    NomadHead -->|nomad client| OP
+    RayHead -->|ray start --address| Cortex
+    RayHead -->|ray start --address| Glia
 
-    subgraph Client["Clients"]
-        Portal["Onyx Portal<br/>(Dashboard)"]
-        BoneML["bone-annotator<br/>(Training jobs)"]
-        BoneRec["bone-recognition<br/>(Inference)"]
+    subgraph Clients["API Clients"]
+        Portal["Onyx Portal"]
+        BoneML["bone-annotator"]
+        BoneRec["bone-recognition"]
     end
 
     Portal -->|GET /health| API
     Portal -->|POST /api/jobs| API
-    Portal -->|GET /api/nodes| API
+    Portal -->|POST /api/serve/sam| API
     BoneML -->|POST /api/jobs| API
-    BoneRec -->|POST /api/serve| API
-    Portal -->|GET /api/serve/status| API
+    BoneRec -->|POST /api/serve/sam| API
+```
+
+### GPU Resource Coordination
+
+```mermaid
+sequenceDiagram
+    actor User
+    participant API as ml-compute API
+    participant Nomad as Nomad Cluster
+    participant SAM as SAM Job
+    participant Ray as Ray Cluster
+    participant Training as bone-ml Job
+
+    User->>API: POST /api/serve/sam/deploy
+    API->>Nomad: Submit sam-inference job
+    Nomad->>Cortex: Allocate GPU + schedule
+    Cortex->>SAM: Docker container starts
+    SAM-->>API: Health check OK
+    
+    User->>API: POST /api/jobs (bone-ml)
+    API->>Nomad: Check GPU availability
+    Note over Nomad: GPU locked by SAM
+    API-->>User: {"status": "queued", "reason": "GPU occupied by sam"}
+    
+    User->>API: DELETE /api/serve/sam/undeploy
+    API->>Nomad: Stop sam-inference job
+    Nomad->>Cortex: Deallocate GPU
+    
+    API->>Ray: Submit bone-ml job (now GPU free)
+    Ray->>Cortex: Schedule on GPU
+    Cortex->>Training: Execute training
 ```
 
 ## Module Interactions
