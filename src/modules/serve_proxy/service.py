@@ -1,7 +1,7 @@
-"""Proxy service for accessing SAM via Ray Serve.
+"""Proxy service for accessing SAM via Nomad orchestration.
 
-Routes requests to SAM deployment on Ray Serve (auto-scheduled on GPU workers).
-Backend migrated from Docker (10.0.0.26:9470) to Ray Serve on Ray cluster.
+Routes requests to SAM deployment managed by Nomad with exclusive GPU allocation.
+Backend migrated from Docker → Ray Serve → Nomad for GPU resource isolation.
 """
 
 import logging
@@ -13,7 +13,7 @@ logger = logging.getLogger(__name__)
 
 
 async def sam_health() -> dict[str, Any]:
-    """Check SAM service health via Ray Serve.
+    """Check SAM service health via Nomad orchestration.
 
     Returns:
         Health status dict.
@@ -24,8 +24,9 @@ async def sam_health() -> dict[str, Any]:
         return {
             "status": status.get("status", "unknown"),
             "service": "sam-vit-b",
-            "backend": "Ray Serve",
+            "backend": status.get("backend", "Nomad"),
             "endpoint": status.get("endpoint"),
+            "is_deployed": status.get("is_deployed", False),
         }
     except Exception as e:
         logger.error(f"SAM health check failed: {e}")
@@ -70,7 +71,7 @@ async def sam_interact(payload: dict[str, Any]) -> dict[str, Any]:
 
 
 async def sam_info() -> dict[str, Any]:
-    """Get SAM service info from Ray Serve.
+    """Get SAM service info from Nomad orchestration.
 
     Returns:
         Service metadata.
@@ -83,6 +84,6 @@ async def sam_info() -> dict[str, Any]:
         return {
             "service": "SAM (Segment Anything Model)",
             "model": "vit_b",
-            "backend": "Ray Serve",
+            "backend": "Nomad",
             "error": str(e),
         }
