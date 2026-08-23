@@ -7,6 +7,13 @@
     {
       "name": "sam",
       "count": 1,
+      "constraints": [
+        {
+          "attribute": "${node.class}",
+          "operator": "is",
+          "value": "gpu"
+        }
+      ],
       "tasks": [
         {
           "name": "sam-inference",
@@ -14,17 +21,16 @@
           "config": {
             "image": "pytorch/pytorch:2.1-cuda12.1-runtime-ubuntu22.04",
             "command": "python",
-            "args": ["-c", "import torch; print(f'CUDA: {torch.cuda.is_available()}'); import sys; sys.stdout.flush(); import time; time.sleep(3600)"]
+            "args": ["-c", "import torch; print(f'CUDA: {torch.cuda.is_available()}'); print(f'GPUs: {torch.cuda.device_count()}'); import sys; sys.stdout.flush(); import time; time.sleep(3600)"],
+            "nvidia_runtime": true,
+            "gpus": 1
           },
           "resources": {
-            "cpu": 2000,
-            "memory": 4096,
-            "devices": [
-              {
-                "name": "gpu",
-                "count": 1
-              }
-            ]
+            "cpu": 4000,
+            "memory": 12288
+          },
+          "env": {
+            "CUDA_VISIBLE_DEVICES": "0"
           }
         }
       ]
