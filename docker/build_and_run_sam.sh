@@ -12,9 +12,9 @@ SAM_MODEL_PATH=${SAM_MODEL_PATH:-$HOME/sam-gpu}
 
 echo "=== Building SAM Docker Image ==="
 docker build -t "$IMAGE_NAME" \
-  --build-arg="DOCKER_BUILDKIT=1" \
-  -f "$SCRIPT_DIR/docker/Dockerfile.sam" \
-  "$SCRIPT_DIR"
+  --no-cache \
+  -f "$SCRIPT_DIR/jobs/sam/Dockerfile" \
+  "$SCRIPT_DIR/jobs/sam"
 
 echo "=== Stopping existing SAM container ==="
 docker rm -f "$CONTAINER_NAME" 2>/dev/null || true
