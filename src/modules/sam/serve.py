@@ -88,50 +88,40 @@ class SAMServeManager:
             return False
 
     async def get_status(self) -> dict[str, Any]:
-        """Get SAM deployment status from Ray Dashboard.
+        """Get SAM deployment status from Docker backend.
 
+        Currently checks Docker container on OnyxCortex:9470.
         Returns:
             Status dict with deployment info.
         """
         try:
+            # Check Docker backend status (consistent with deploy() method)
             async with httpx.AsyncClient() as client:
                 response = await client.get(
-                    f"{self.dashboard_url}/api/serve/applications/",
-                    timeout=HTTP_TIMEOUT,
+                    "http://10.0.0.26:9470/health",
+                    timeout=5.0,
                 )
                 response.raise_for_status()
                 data = response.json()
 
-            applications = data.get("applications", {})
-
-            # Look for SAM deployment in any application
-            for app_name, app_info in applications.items():
-                deployments = app_info.get("deployments", {})
-                if self.deployment_name in deployments:
-                    deploy_info = deployments[self.deployment_name]
-                    return {
-                        "status": deploy_info.get("status", "unknown"),
-                        "deployment": self.deployment_name,
-                        "endpoint": self.endpoint,
-                        "num_replicas": len(
-                            deploy_info.get("replica_states", {}).get("RUNNING", [])
-                        ),
-                        "is_deployed": True,
-                    }
+            health_status = data.get("status", "unknown")
+            is_healthy = health_status in ("ok", "ready")
 
             return {
-                "status": "not_deployed",
+                "status": "deployed" if is_healthy else "unhealthy",
                 "deployment": self.deployment_name,
-                "endpoint": self.endpoint,
-                "num_replicas": 0,
-                "is_deployed": False,
+                "endpoint": "http://10.0.0.26:9470",
+                "backend": "Docker",
+                "is_deployed": is_healthy,
+                "health": health_status,
             }
         except Exception as e:
             logger.debug(f"Failed to get status: {e}")
             return {
-                "status": "error",
+                "status": "not_deployed",
                 "deployment": self.deployment_name,
-                "endpoint": self.endpoint,
+                "endpoint": "http://10.0.0.26:9470",
+                "backend": "Docker",
                 "error": str(e),
                 "is_deployed": False,
             }
