@@ -1,106 +1,194 @@
-"""Nuclio handler for SAM proxy to ml-compute backend."""
+"""Nuclio handler for SAM proxy — CVAT interactor protocol.
+
+Translates CVAT interactor format to SAM server API,
+converts SAM binary masks to CVAT polygon format.
+Routes directly to SAM GPU server on OnyxCortex.
+"""
 
 import json
 import logging
-from typing import Any
+import os
 
+import cv2
+import numpy as np
 import requests
 
-# Configuration
-SAM_BACKEND_URL = "http://10.0.0.44:9469/api/serve/sam/interact"
+SAM_GPU_URL = os.environ.get("SAM_GPU_URL", "http://10.0.0.26:9470")
+SAM_MODEL_NAME = os.environ.get("SAM_MODEL_NAME", "vit_b")
 TIMEOUT = 60.0
 
 logger = logging.getLogger(__name__)
 
+# Track which model was last switched to avoid redundant calls
+_last_switched_model = None
 
-def handler(context: Any, event: Any) -> dict:
-    """Forward segmentation requests to ml-compute SAM backend.
 
-    Receives HTTP POST with segmentation request, forwards to ml-compute,
-    returns SAM segmentation results to caller.
+def init_context(context):
+    """Initialize handler context."""
+    context.logger.info(f"SAM Nuclio proxy -> {SAM_GPU_URL} (model: {SAM_MODEL_NAME})")
+
+
+def _ensure_model():
+    """Switch SAM model if needed (idempotent)."""
+    global _last_switched_model
+    if _last_switched_model == SAM_MODEL_NAME:
+        return
+    try:
+        resp = requests.post(
+            f"{SAM_GPU_URL}/switch-model",
+            json={"model": SAM_MODEL_NAME},
+            timeout=30.0,
+        )
+        if resp.status_code == 200:
+            _last_switched_model = SAM_MODEL_NAME
+            logger.info(f"SAM model switched to {SAM_MODEL_NAME}")
+    except Exception as e:
+        logger.warning(f"Model switch failed: {e}")
+
+
+def _cvat_to_sam(cvat_data):
+    """Translate CVAT interactor fields to SAM server fields.
+
+    CVAT sends: image, pos_points, neg_points, obj_bbox
+    SAM expects: image_base64, points, negative_points, box
+    """
+    sam_request = {
+        "image_base64": cvat_data.get("image", ""),
+    }
+
+    pos_points = cvat_data.get("pos_points", [])
+    if pos_points:
+        sam_request["points"] = [[int(p[0]), int(p[1])] for p in pos_points]
+
+    neg_points = cvat_data.get("neg_points", [])
+    if neg_points:
+        sam_request["negative_points"] = [[int(p[0]), int(p[1])] for p in neg_points]
+
+    # CVAT obj_bbox is [x, y, w, h], SAM box is [x1, y1, x2, y2]
+    bbox = cvat_data.get("obj_bbox")
+    if bbox and len(bbox) == 4:
+        x, y, w, h = bbox
+        sam_request["box"] = [int(x), int(y), int(x + w), int(y + h)]
+
+    return sam_request
+
+
+def _mask_to_polygon(mask_2d):
+    """Convert binary mask array to polygon coordinates for CVAT.
 
     Args:
-        context: Nuclio context (logging, env vars)
-        event: Nuclio event object containing HTTP request
+        mask_2d: 2D list/array of 0s and 1s (H x W).
 
     Returns:
-        dict with status and segmentation results
+        List of [x, y] coordinate pairs forming the polygon.
+    """
+    mask_uint8 = np.array(mask_2d, dtype=np.uint8)
+    contours, _ = cv2.findContours(mask_uint8, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_TC89_L1)
+
+    if not contours:
+        return []
+
+    # Take the largest contour
+    largest = max(contours, key=cv2.contourArea)
+
+    # Flatten to [[x1,y1],[x2,y2],...] format with integer coords
+    polygon = [[int(pt[0]), int(pt[1])] for pt in largest.reshape(-1, 2)]
+    return polygon
+
+
+def handler(context, event):
+    """CVAT interactor handler: receive points, return polygon mask.
+
+    CVAT calls this with image + interaction points.
+    We forward to SAM server, convert the mask to polygon, return to CVAT.
     """
     try:
-        # Parse request body
-        if isinstance(event.body, str):
-            request_data = json.loads(event.body)
+        # Parse CVAT request
+        if isinstance(event.body, bytes):
+            cvat_data = json.loads(event.body.decode())
+        elif isinstance(event.body, str):
+            cvat_data = json.loads(event.body)
+        elif isinstance(event.body, dict):
+            cvat_data = event.body
         else:
-            request_data = event.body
+            cvat_data = json.loads(str(event.body))
 
-        logger.info(f"Proxy request: image_size={len(request_data.get('image_base64', ''))}, "
-                    f"points={len(request_data.get('points', []))}")
-
-        # Forward to SAM backend
-        response = requests.post(
-            SAM_BACKEND_URL,
-            json=request_data,
-            timeout=TIMEOUT,
-            headers={"Content-Type": "application/json"},
+        context.logger.info(
+            f"CVAT request: pos_points={len(cvat_data.get('pos_points', []))}, "
+            f"neg_points={len(cvat_data.get('neg_points', []))}"
         )
 
-        # Check response status
-        if response.status_code != 200:
-            logger.error(f"Backend error: {response.status_code} - {response.text}")
-            return {
-                "statusCode": response.status_code,
-                "body": json.dumps({
-                    "status": "error",
-                    "detail": f"Backend returned {response.status_code}",
-                }),
-            }
+        # Ensure correct model is active
+        _ensure_model()
 
-        # Success
-        result = response.json()
-        logger.info(f"Segmentation succeeded: {len(result.get('masks', []))} masks")
+        # Translate CVAT format to SAM format
+        sam_request = _cvat_to_sam(cvat_data)
 
-        return {
-            "statusCode": 200,
-            "body": json.dumps(result),
-            "headers": {"Content-Type": "application/json"},
-        }
+        # Call SAM server
+        resp = requests.post(
+            f"{SAM_GPU_URL}/api/interact",
+            json=sam_request,
+            timeout=TIMEOUT,
+        )
+
+        if resp.status_code != 200:
+            context.logger.error(f"SAM error: {resp.status_code} - {resp.text[:200]}")
+            return context.Response(
+                body=json.dumps({"error": f"SAM returned {resp.status_code}"}),
+                headers={"Content-Type": "application/json"},
+                content_type="application/json",
+                status_code=resp.status_code,
+            )
+
+        result = resp.json()
+
+        # Convert SAM mask to CVAT polygon
+        masks = result.get("masks", [])
+        if not masks:
+            context.logger.warning("SAM returned no masks")
+            return context.Response(
+                body=json.dumps([]),
+                headers={"Content-Type": "application/json"},
+                content_type="application/json",
+                status_code=200,
+            )
+
+        # SAM returns masks[0] as the best mask (multimask_output=False)
+        polygon = _mask_to_polygon(masks[0])
+
+        context.logger.info(f"Polygon: {len(polygon)} points")
+
+        # CVAT expects a flat list of [x, y] pairs
+        return context.Response(
+            body=json.dumps(polygon),
+            headers={"Content-Type": "application/json"},
+            content_type="application/json",
+            status_code=200,
+        )
 
     except requests.exceptions.Timeout:
-        logger.error(f"Backend timeout after {TIMEOUT}s")
-        return {
-            "statusCode": 504,
-            "body": json.dumps({
-                "status": "error",
-                "detail": "Backend timeout",
-            }),
-        }
+        context.logger.error(f"SAM timeout after {TIMEOUT}s")
+        return context.Response(
+            body=json.dumps({"error": "SAM timeout"}),
+            headers={"Content-Type": "application/json"},
+            content_type="application/json",
+            status_code=504,
+        )
 
     except requests.exceptions.ConnectionError as e:
-        logger.error(f"Cannot connect to backend: {e}")
-        return {
-            "statusCode": 503,
-            "body": json.dumps({
-                "status": "error",
-                "detail": f"Cannot connect to backend at {SAM_BACKEND_URL}",
-            }),
-        }
-
-    except json.JSONDecodeError as e:
-        logger.error(f"Invalid JSON in request: {e}")
-        return {
-            "statusCode": 400,
-            "body": json.dumps({
-                "status": "error",
-                "detail": "Invalid JSON in request",
-            }),
-        }
+        context.logger.error(f"SAM unreachable: {e}")
+        return context.Response(
+            body=json.dumps({"error": f"SAM unreachable at {SAM_GPU_URL}"}),
+            headers={"Content-Type": "application/json"},
+            content_type="application/json",
+            status_code=503,
+        )
 
     except Exception as e:
-        logger.error(f"Unexpected error: {e}", exc_info=True)
-        return {
-            "statusCode": 500,
-            "body": json.dumps({
-                "status": "error",
-                "detail": f"Internal error: {str(e)}",
-            }),
-        }
+        context.logger.error(f"Handler error: {e}", exc_info=True)
+        return context.Response(
+            body=json.dumps({"error": str(e)}),
+            headers={"Content-Type": "application/json"},
+            content_type="application/json",
+            status_code=500,
+        )
