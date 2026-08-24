@@ -18,7 +18,7 @@ from src.modules.nomad.utils import build_job_spec, count_gpus
 
 logger = logging.getLogger(__name__)
 
-NOMAD_URL = CONFIG.get("nomad", {}).get("url", "http://10.0.0.44:4646")
+NOMAD_URL = CONFIG["endpoints"]["nomad"]
 NOMAD_TIMEOUT = CONFIG.get("nomad", {}).get("timeout", 30.0)
 
 

@@ -18,10 +18,10 @@ logger = logging.getLogger(__name__)
 # Configuration from YAML
 _nomad_cfg = CONFIG.get("nomad", {})
 _sam_cfg = CONFIG.get("sam", {})
-NOMAD_URL = os.environ.get("NOMAD_URL", _nomad_cfg.get("url", "http://10.0.0.44:4646"))
+NOMAD_URL = os.environ.get("NOMAD_URL", CONFIG["endpoints"]["nomad"])
 SAM_JOB_NAME = _sam_cfg.get("job_name", "sam-inference")
 SAM_ENDPOINT_PORT = _sam_cfg.get("endpoint_port", 9470)
-SAM_HOST = _sam_cfg.get("host", "10.0.0.26")
+SAM_HOST = CONFIG["endpoints"]["sam"].split("://")[1].split(":")[0]
 SAM_JOB_SPEC_PATH = _sam_cfg.get("job_spec_path", "/opt/onyx/skills/ml-compute/jobs/sam/sam_job_spec.json")
 HTTP_TIMEOUT = _nomad_cfg.get("timeout", 30.0)
 

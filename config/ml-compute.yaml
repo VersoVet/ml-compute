@@ -1,6 +1,14 @@
 # ml-compute configuration
 # Endpoints et constantes du cluster Ray
 
+endpoints:
+  core: "http://10.0.0.44:8050"
+  vault: "http://10.0.0.44:8050/vault"
+  nomad: "http://10.0.0.44:4646"
+  ray_dashboard: "http://localhost:8265"
+  ray_serve: "http://localhost:8000"
+  sam: "http://10.0.0.26:9470"
+
 ray:
   dashboard_url: "http://localhost:8265"
   serve_url: "http://localhost:8000"
