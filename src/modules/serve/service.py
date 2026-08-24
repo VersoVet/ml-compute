@@ -10,10 +10,12 @@ from typing import Any
 
 import httpx
 
+from src.config import CONFIG
+
 logger = logging.getLogger(__name__)
 
-RAY_DASHBOARD_URL = os.environ.get("RAY_DASHBOARD_URL", "http://localhost:8265")
-RAY_SERVE_URL = os.environ.get("RAY_SERVE_URL", "http://localhost:8000")
+RAY_DASHBOARD_URL = os.environ.get("RAY_DASHBOARD_URL", CONFIG["endpoints"]["ray_dashboard"])
+RAY_SERVE_URL = os.environ.get("RAY_SERVE_URL", CONFIG["endpoints"]["ray_serve"])
 HTTP_TIMEOUT = 15.0
 
 

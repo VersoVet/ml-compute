@@ -6,9 +6,11 @@ from typing import Any
 
 import httpx
 
+from src.config import CONFIG
+
 logger = logging.getLogger(__name__)
 
-RAY_DASHBOARD_URL = os.environ.get("RAY_DASHBOARD_URL", "http://localhost:8265")
+RAY_DASHBOARD_URL = os.environ.get("RAY_DASHBOARD_URL", CONFIG["endpoints"]["ray_dashboard"])
 
 
 async def get_cluster_nodes() -> dict[str, Any]:

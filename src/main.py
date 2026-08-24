@@ -44,7 +44,7 @@ class RayClient:
         Args:
             dashboard_url: Ray Dashboard URL. Defaults to http://localhost:8265.
         """
-        self.dashboard_url = dashboard_url or os.environ.get("RAY_DASHBOARD_URL", "http://localhost:8265")
+        self.dashboard_url = dashboard_url or os.environ.get("RAY_DASHBOARD_URL", CONFIG["endpoints"]["ray_dashboard"])
 
     async def connect(self) -> None:
         """Verify Ray dashboard is accessible."""
