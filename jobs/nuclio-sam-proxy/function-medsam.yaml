@@ -9,8 +9,7 @@ metadata:
     name: "MedSAM (medical)"
     type: "interactor"
     framework: "pytorch"
-    spec: |
-      [{"id": 0, "type": "points"}, {"id": 1, "type": "rectangle"}]
+    spec: ""
     min_pos_points: "1"
     min_neg_points: "0"
     startswith_box: "false"
