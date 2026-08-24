@@ -1,5 +1,40 @@
 # ml-compute - Architecture Diagram
 
+## Multi-Backend Compute
+
+```mermaid
+graph LR
+    subgraph Clients["Skills Clients"]
+        BoneML["bone-ml"]
+        BoneAnn["bone-annotator"]
+        BoneRec["bone-recognition"]
+    end
+
+    subgraph mlcompute["ml-compute API :9469"]
+        Router["BackendManager<br/>auto-select"]
+    end
+
+    subgraph Backends["Compute Backends"]
+        Local["Local Ray Cluster<br/>RTX 4070 SUPER 12GB<br/>OnyxCortex + Glia"]
+        Lightning["Lightning AI<br/>Tesla T4 16GB<br/>~22h GPU/mois"]
+        Kaggle["Kaggle Notebooks<br/>Tesla T4 16GB<br/>30h GPU/semaine"]
+    end
+
+    BoneML -->|POST /api/compute/submit| Router
+    BoneAnn -->|POST /api/compute/submit| Router
+    BoneRec -->|POST /api/compute/submit| Router
+
+    Router -->|backend: local| Local
+    Router -->|backend: lightning| Lightning
+    Router -->|backend: kaggle| Kaggle
+
+    style Local fill:#3498db,color:#fff
+    style Lightning fill:#9b59b6,color:#fff
+    style Kaggle fill:#2ecc71,color:#fff
+```
+
+---
+
 ## Cluster Ray + Nomad
 
 ```mermaid

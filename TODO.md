@@ -51,11 +51,23 @@ Ne passe plus par Ray ni ml-compute. Voir bone-annotator/API.md.
 ### v0.2.0: Code review cleanup (DONE)
 Config YAML centralisée, imports absolus, dead code supprimé, StrEnum, datetime.now(UTC).
 
+### v0.2.2: Module compute_backends (DONE)
+Interface unifiée multi-backend : local Ray, Lightning AI (T4 validé), Kaggle (T4 en attente GPU).
+Endpoints /api/backends et /api/compute/*. Auto-selection local > lightning > kaggle.
+
 </details>
 
 ---
 
 ## Taches actives
+
+### Compute backends — prochaines etapes
+
+- [ ] Kaggle : debloquer GPU (verification telephonique en attente)
+- [ ] Lightning AI : optimiser gestion Studio (start/stop automatique, preservation credits)
+- [ ] Ajouter backend DigitalOcean (cle API stockee dans Vault)
+- [ ] Transfert fichiers : upload datasets / download modeles entre backends
+- [ ] Job queue : file d'attente si tous les backends GPU sont occupes
 
 ### Nettoyage legacy SAM
 
@@ -64,16 +76,11 @@ Config YAML centralisée, imports absolus, dead code supprimé, StrEnum, datetim
 - [ ] Retirer les routers SAM de `main.py`
 - [ ] Supprimer `jobs/sam/` et `jobs/nuclio-sam-proxy/` (fichiers reference)
 - [ ] Retirer la section SAM de `config/ml-compute.yaml`
-- [ ] Mettre a jour les tests si impactes
 
-### Fix test jobs mock async
+### Fix et ameliorations
 
-- [ ] Corriger `src/modules/jobs/tests/test_jobs.py` : mock async broken (coroutine non-awaited)
-
-### Améliorations possibles
-
+- [ ] Corriger `src/modules/jobs/tests/test_jobs.py` : mock async broken
 - [ ] Connecter Axon (10.0.0.21) comme CPU Worker Ray
-- [ ] Endpoint `/api/jobs/{id}/logs` streaming (SSE/WebSocket)
 - [ ] Dashboard UI frontend (React/Svelte sur `/`)
 - [ ] Alerting automatique via email-notification quand un job GPU fail
-- [ ] Intégration MLflow pour tracking des metrics de training
+- [ ] Integration MLflow pour tracking des metrics de training

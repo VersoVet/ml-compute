@@ -251,6 +251,111 @@ curl -X POST http://10.0.0.44:9469/api/serve/undeploy \
 
 ---
 
+## Compute Backends API
+
+API unifiee pour soumettre des jobs ML sur differents backends (local, Lightning AI, Kaggle).
+Les skills clients n'ont pas besoin de savoir quel backend execute le job.
+
+### GET /api/backends
+Liste tous les backends avec disponibilite et GPU.
+
+```bash
+curl http://10.0.0.44:9469/api/backends
+```
+
+**Response**:
+```json
+[
+  {
+    "name": "Local Ray Cluster",
+    "type": "local",
+    "available": true,
+    "gpu_types": ["RTX 4070 SUPER 12GB", "T1000 8GB"],
+    "free_quota": "Unlimited (on-premise)",
+    "status_detail": "Ray cluster healthy"
+  },
+  {
+    "name": "Lightning AI",
+    "type": "lightning",
+    "available": true,
+    "gpu_types": ["Tesla T4 16GB"],
+    "free_quota": "~22h GPU/mois",
+    "status_detail": "Studio 'onyx-ml-worker' (stopped)"
+  },
+  {
+    "name": "Kaggle Notebooks",
+    "type": "kaggle",
+    "available": true,
+    "gpu_types": ["Tesla T4 16GB"],
+    "free_quota": "30h GPU/semaine",
+    "status_detail": "User: versovet"
+  }
+]
+```
+
+### POST /api/compute/submit
+Soumet un job ML. Backend auto-selectionne (local > lightning > kaggle) ou explicite.
+
+```bash
+# Auto-select backend
+curl -X POST http://10.0.0.44:9469/api/compute/submit \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "yolo-test",
+    "entrypoint": "python train.py",
+    "gpu_required": true,
+    "env_vars": {"EPOCHS": "3", "BATCH_SIZE": "16"}
+  }'
+
+# Forcer Lightning AI
+curl -X POST http://10.0.0.44:9469/api/compute/submit \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "yolo-test",
+    "entrypoint": "python train.py",
+    "backend": "lightning",
+    "gpu_required": true
+  }'
+```
+
+**Response**:
+```json
+{
+  "job_id": "lightning-yolo-test-1724505600",
+  "name": "yolo-test",
+  "backend": "lightning",
+  "status": "succeeded",
+  "gpu": "Tesla T4",
+  "duration_s": 27.7,
+  "logs": "YOLO TRAINING DONE in 27.7s..."
+}
+```
+
+**Backends disponibles** : `local`, `lightning`, `kaggle`
+
+### GET /api/compute/{job_id}
+Statut d'un job soumis via compute.
+
+```bash
+curl http://10.0.0.44:9469/api/compute/{job_id}
+```
+
+### GET /api/compute/{job_id}/logs
+Logs d'execution d'un job.
+
+```bash
+curl http://10.0.0.44:9469/api/compute/{job_id}/logs
+```
+
+### POST /api/compute/{job_id}/stop
+Arrete un job en cours.
+
+```bash
+curl -X POST http://10.0.0.44:9469/api/compute/{job_id}/stop
+```
+
+---
+
 ## Models API
 
 ### GET /api/models
@@ -355,6 +460,11 @@ Ne passe PAS par Ray ni ml-compute. Voir `bone-annotator/API.md`.
 ---
 
 ## Updates
+
+### [v0.2.2] 2026-08-24
+- Module compute_backends : interface unifiee multi-backend (local, Lightning AI, Kaggle)
+- Nouveaux endpoints /api/backends et /api/compute/*
+- Lightning AI T4 valide (YOLO 3 epochs en 27.7s)
 
 ### [v0.2.0] 2026-08-24
 - Config YAML centralisee (plus d'IPs hardcodees)

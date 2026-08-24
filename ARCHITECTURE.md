@@ -2,10 +2,11 @@
 
 ## Vue d'ensemble
 
-**ml-compute** est un **orchestrateur ML centralisé** dont le rôle se limite a :
-1. **Ray** — Soumission et monitoring de jobs training distribues sur workers GPU/CPU
-2. **Nomad** — Allocation exclusive des GPUs (anti-conflit CUDA entre jobs)
-3. **FastAPI** — API unifiee pour les skills metier (bone-ml, bone-annotator, bone-recognition)
+**ml-compute** est un **orchestrateur ML centralisé** :
+1. **Compute Backends** — Interface unifiee multi-backend (local Ray, Lightning AI, Kaggle)
+2. **Ray** — Soumission et monitoring de jobs training distribues sur workers GPU/CPU
+3. **Nomad** — Allocation exclusive des GPUs (anti-conflit CUDA entre jobs)
+4. **FastAPI** — API unifiee pour les skills metier (bone-ml, bone-annotator, bone-recognition)
 
 **Hors scope** : SAM/MedSAM inference et CVAT sont geres directement par **bone-annotator** sur OnyxCortex, sans passer par Ray ni ml-compute (voir section "Separation SAM").
 
@@ -140,7 +141,29 @@ Orchestration GPU via Nomad. Allocation exclusive, prevention conflits CUDA.
 - `routes.py`: Endpoints /api/nomad/*
 - `utils.py`: build_job_spec, count_gpus
 
-### 6. **sam/** et **serve_proxy/** (LEGACY)
+### 6. **compute_backends** (`src/modules/compute_backends/`)
+Interface unifiee multi-backend pour soumettre des jobs ML sur differentes plateformes.
+
+- `service.py`: BackendManager (auto-select, routing, job tracking)
+- `models.py`: ComputeJobRequest, ComputeJobResponse, BackendType, JobStatus
+- `routes.py`: Endpoints /api/backends, /api/compute/*
+- `backends/base.py`: ComputeBackend ABC (interface commune)
+- `backends/local.py`: Ray cluster (OnyxCortex GPU, Glia CPU)
+- `backends/lightning.py`: Lightning AI Studios (T4 GPU, SDK Python)
+- `backends/kaggle.py`: Kaggle Notebooks (T4 GPU, CLI API)
+- Tests: 8 tests unitaires
+
+**Auto-selection** : local (si healthy) > lightning > kaggle
+
+**Flow** :
+```
+skill client → POST /api/compute/submit → BackendManager
+                                            ├── local: Ray Dashboard API
+                                            ├── lightning: Studio SDK → T4 GPU
+                                            └── kaggle: kernels push → T4 GPU
+```
+
+### 7. **sam/** et **serve_proxy/** (LEGACY)
 Modules proxy SAM historiques. SAM est desormais gere par bone-annotator.
 Ces modules sont conserves temporairement mais seront supprimes.
 
@@ -199,6 +222,11 @@ ml-compute/
 │       │   ├── models.py
 │       │   ├── routes.py
 │       │   └── utils.py
+│       ├── compute_backends/   # Multi-backend job submission
+│       │   ├── service.py     # BackendManager
+│       │   ├── models.py      # Pydantic models
+│       │   ├── routes.py      # /api/backends, /api/compute/*
+│       │   └── backends/      # local, lightning, kaggle
 │       ├── sam/                # [LEGACY] Proxy SAM
 │       └── serve_proxy/        # [LEGACY] Proxy SAM routes
 │
@@ -226,6 +254,8 @@ ml-compute/
 | `pydantic` | 2.5.0 | Validation |
 | `pyyaml` | 6.0.1 | Config loader |
 | `onyx-sdk` | 2.1.0 | Integration Redis/Events |
+| `lightning-sdk` | latest | Lightning AI Studios |
+| `kaggle` | latest | Kaggle Notebooks API |
 
 ## Principes
 
