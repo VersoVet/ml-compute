@@ -8,7 +8,7 @@ from typing import Any
 
 from fastapi import APIRouter
 
-from .serve import get_sam_manager
+from src.modules.sam.serve import get_sam_manager
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["SAM Control"])

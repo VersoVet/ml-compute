@@ -1,13 +1,12 @@
 """Nomad cluster manager for job orchestration and GPU resource coordination."""
 
-import json
 import logging
-import os
-from typing import Any, Optional
+from typing import Any
 
 import httpx
 
-from .models import (
+from src.config import CONFIG
+from src.modules.nomad.models import (
     AllocationStatus,
     GPUStatus,
     NomadClusterStatus,
@@ -15,11 +14,12 @@ from .models import (
     NomadJobStatus,
     TaskStatus,
 )
+from src.modules.nomad.utils import build_job_spec, count_gpus
 
 logger = logging.getLogger(__name__)
 
-NOMAD_URL = os.environ.get("NOMAD_URL", "http://10.0.0.44:4646")
-NOMAD_TIMEOUT = 30.0
+NOMAD_URL = CONFIG.get("nomad", {}).get("url", "http://10.0.0.44:4646")
+NOMAD_TIMEOUT = CONFIG.get("nomad", {}).get("timeout", 30.0)
 
 
 class NomadManager:
@@ -32,7 +32,6 @@ class NomadManager:
             nomad_url: Nomad HTTP API URL.
         """
         self.nomad_url = nomad_url
-        self.client: Optional[httpx.AsyncClient] = None
 
     async def connect(self) -> None:
         """Verify Nomad cluster is accessible.
@@ -41,11 +40,8 @@ class NomadManager:
             ConnectionError: If Nomad is unreachable.
         """
         try:
-            self.client = httpx.AsyncClient()
             async with httpx.AsyncClient() as client:
-                response = await client.get(
-                    f"{self.nomad_url}/v1/status/leader", timeout=NOMAD_TIMEOUT
-                )
+                response = await client.get(f"{self.nomad_url}/v1/status/leader", timeout=NOMAD_TIMEOUT)
                 response.raise_for_status()
             logger.info(f"Connected to Nomad at {self.nomad_url}")
         except Exception as e:
@@ -54,8 +50,6 @@ class NomadManager:
 
     async def disconnect(self) -> None:
         """Close Nomad client connection."""
-        if self.client:
-            await self.client.aclose()
         logger.info("Disconnected from Nomad")
 
     async def submit_job(self, request: NomadJobRequest) -> dict[str, Any]:
@@ -71,7 +65,7 @@ class NomadManager:
             httpx.HTTPError: If submission fails.
         """
         try:
-            job_spec = self._build_job_spec(request)
+            job_spec = build_job_spec(request)
             async with httpx.AsyncClient() as client:
                 response = await client.post(
                     f"{self.nomad_url}/v1/jobs",
@@ -109,7 +103,6 @@ class NomadManager:
                 response.raise_for_status()
                 job_data = response.json()
 
-                # Get allocations (within same client context)
                 alloc_response = await client.get(
                     f"{self.nomad_url}/v1/job/{job_id}/allocations",
                     timeout=NOMAD_TIMEOUT,
@@ -180,7 +173,6 @@ class NomadManager:
         """
         try:
             async with httpx.AsyncClient() as client:
-                # Get nodes
                 nodes_response = await client.get(
                     f"{self.nomad_url}/v1/nodes",
                     timeout=NOMAD_TIMEOUT,
@@ -190,7 +182,6 @@ class NomadManager:
 
                 nodes_ready = sum(1 for n in nodes_data if n.get("Status") == "ready")
 
-                # Get jobs (within same client context)
                 jobs_response = await client.get(
                     f"{self.nomad_url}/v1/jobs",
                     timeout=NOMAD_TIMEOUT,
@@ -198,18 +189,14 @@ class NomadManager:
                 jobs_response.raise_for_status()
                 jobs_data = jobs_response.json() or []
 
-                jobs_running = sum(
-                    1 for j in jobs_data if j.get("Status") == "running"
-                )
-                jobs_pending = sum(
-                    1 for j in jobs_data if j.get("Status") == "pending"
-                )
+                jobs_running = sum(1 for j in jobs_data if j.get("Status") == "running")
+                jobs_pending = sum(1 for j in jobs_data if j.get("Status") == "pending")
 
             return NomadClusterStatus(
                 nodes_ready=nodes_ready,
                 nodes_total=len(nodes_data),
-                gpus_total=self._count_gpus(nodes_data, total=True),
-                gpus_available=self._count_gpus(nodes_data, available=True),
+                gpus_total=count_gpus(nodes_data),
+                gpus_available=count_gpus(nodes_data),
                 jobs_running=jobs_running,
                 jobs_pending=jobs_pending,
             )
@@ -230,7 +217,7 @@ class NomadManager:
         Returns:
             List of GPU status per node.
         """
-        statuses = []
+        statuses: list[GPUStatus] = []
         try:
             async with httpx.AsyncClient() as client:
                 nodes_response = await client.get(
@@ -244,7 +231,6 @@ class NomadManager:
                     node_id = node.get("ID")
                     node_name = node.get("Name")
 
-                    # Get node details for GPU detection (within same client context)
                     node_detail = await client.get(
                         f"{self.nomad_url}/v1/node/{node_id}",
                         timeout=NOMAD_TIMEOUT,
@@ -252,7 +238,6 @@ class NomadManager:
                     node_detail.raise_for_status()
                     node_data = node_detail.json()
 
-                    # Count GPUs from NodeResources.Devices
                     devices = node_data.get("NodeResources", {}).get("Devices") or []
                     gpu_devices = [d for d in devices if d.get("Type") == "gpu"]
                     num_gpus = len(gpu_devices)
@@ -271,90 +256,3 @@ class NomadManager:
             logger.error(f"Failed to get GPU status: {e}")
 
         return statuses
-
-    def _build_job_spec(self, request: NomadJobRequest) -> dict[str, Any]:
-        """Build Nomad job specification from request.
-
-        Args:
-            request: Job request.
-
-        Returns:
-            Nomad job spec dictionary.
-        """
-        task_group_constraints = request.constraints[0] if request.constraints else None
-
-        # Build driver config based on driver type
-        if request.driver == "docker":
-            driver_config = {
-                "image": request.image or "ubuntu:22.04",
-                "command": "sh",
-                "args": ["-c", request.command],
-            }
-            if request.volumes:
-                driver_config["mounts"] = [
-                    {"type": "bind", "target": target, "source": source}
-                    for source, target in request.volumes.items()
-                ]
-        else:
-            driver_config = {
-                "command": "sh",
-                "args": ["-c", request.command],
-            }
-
-        # Build resource requirements (Nomad API format)
-        task_resources = {
-            "CPU": task_group_constraints.cpu_mhz if task_group_constraints else 1000,
-            "MemoryMB": task_group_constraints.memory_mb if task_group_constraints else 512,
-        }
-
-        # Build task specification
-        task = {
-            "Name": request.name,
-            "Driver": request.driver,
-            "Config": driver_config,
-            "Resources": task_resources,
-            "Env": request.env_vars if request.env_vars else {},
-        }
-
-        if request.timeout_seconds > 0:
-            task["Timeout"] = f"{request.timeout_seconds}s"
-
-        # Build job specification (Nomad API format)
-        job_spec = {
-            "ID": request.name,
-            "Name": request.name,
-            "Type": request.job_type,
-            "Priority": request.priority.value,
-            "Datacenters": request.datacenters,
-            "TaskGroups": [
-                {
-                    "Name": f"{request.name}-group",
-                    "Count": 1,
-                    "Tasks": [task],
-                }
-            ],
-        }
-
-        return job_spec
-
-    def _count_gpus(
-        self, nodes: list[dict], total: bool = False, available: bool = False
-    ) -> int:
-        """Count GPUs from node list.
-
-        Args:
-            nodes: List of node data.
-            total: Count total GPUs.
-            available: Count available GPUs.
-
-        Returns:
-            GPU count.
-        """
-        count = 0
-        for node in nodes:
-            # Placeholder: count based on node type or attributes
-            # OnyxCortex and OnyxPoint should have 1 GPU each
-            node_name = node.get("Name", "").lower()
-            if "cortex" in node_name or "point" in node_name:
-                count += 1
-        return count

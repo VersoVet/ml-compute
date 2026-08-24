@@ -11,36 +11,39 @@ from typing import Any
 
 import httpx
 
+from src.config import CONFIG
+
 logger = logging.getLogger(__name__)
 
-# Nomad configuration
-NOMAD_URL = os.environ.get("NOMAD_URL", "http://10.0.0.44:4646")
-SAM_JOB_NAME = "sam-inference"
-SAM_ENDPOINT_PORT = 9470
-HTTP_TIMEOUT = 30.0
+# Configuration from YAML
+_nomad_cfg = CONFIG.get("nomad", {})
+_sam_cfg = CONFIG.get("sam", {})
+NOMAD_URL = os.environ.get("NOMAD_URL", _nomad_cfg.get("url", "http://10.0.0.44:4646"))
+SAM_JOB_NAME = _sam_cfg.get("job_name", "sam-inference")
+SAM_ENDPOINT_PORT = _sam_cfg.get("endpoint_port", 9470)
+SAM_HOST = _sam_cfg.get("host", "10.0.0.26")
+SAM_JOB_SPEC_PATH = _sam_cfg.get("job_spec_path", "/opt/onyx/skills/ml-compute/jobs/sam/sam_job_spec.json")
+HTTP_TIMEOUT = _nomad_cfg.get("timeout", 30.0)
 
 
 class SAMServeManager:
     """Manager for Nomad SAM deployment with exclusive GPU allocation."""
 
-    def __init__(self, nomad_url: str = NOMAD_URL):
+    def __init__(self, nomad_url: str = NOMAD_URL) -> None:
         """Initialize SAM Serve manager.
 
         Args:
-            nomad_url: Nomad API URL (default: http://10.0.0.44:4646)
+            nomad_url: Nomad API URL.
         """
         self.nomad_url = nomad_url
         self.job_name = SAM_JOB_NAME
-        self.deployment_name = SAM_JOB_NAME  # For compatibility with routes
+        self.deployment_name = SAM_JOB_NAME
         self.is_deployed = False
         self.allocation_id: str | None = None
-        self.endpoint = f"http://localhost:{SAM_ENDPOINT_PORT}"  # Nomad allocates port
+        self.endpoint = f"http://{SAM_HOST}:{SAM_ENDPOINT_PORT}"
 
     async def deploy(self) -> bool:
         """Deploy SAM on Nomad with exclusive GPU allocation.
-
-        Submits the sam-inference job to Nomad cluster.
-        GPU allocation is managed exclusively by Nomad.
 
         Returns:
             True if job submitted successfully, False otherwise.
@@ -48,32 +51,26 @@ class SAMServeManager:
         try:
             logger.info("Deploying SAM via Nomad...")
 
-            # Check if job already exists
             async with httpx.AsyncClient() as client:
-                # First, check if job is already running
                 try:
                     response = await client.get(
                         f"{self.nomad_url}/v1/job/{self.job_name}",
                         timeout=HTTP_TIMEOUT,
                     )
                     if response.status_code == 200:
-                        logger.info("✓ SAM job already exists in Nomad")
+                        logger.info("SAM job already exists in Nomad")
                         self.is_deployed = True
                         return True
                 except Exception:
                     pass
 
-                # Job doesn't exist or error occurred, submit new job
-                # Load job spec from file
-                job_spec_path = "/opt/onyx/skills/ml-compute/jobs/sam/sam_job_spec.json"
-                if not os.path.exists(job_spec_path):
-                    logger.error(f"SAM job spec not found: {job_spec_path}")
+                if not os.path.exists(SAM_JOB_SPEC_PATH):
+                    logger.error(f"SAM job spec not found: {SAM_JOB_SPEC_PATH}")
                     return False
 
-                with open(job_spec_path) as f:
+                with open(SAM_JOB_SPEC_PATH) as f:
                     job_spec = json.load(f)
 
-                # Submit job to Nomad
                 response = await client.post(
                     f"{self.nomad_url}/v1/jobs",
                     json={"Job": job_spec},
@@ -83,7 +80,7 @@ class SAMServeManager:
                 result = response.json()
 
                 self.is_deployed = True
-                logger.info(f"✓ SAM job submitted to Nomad (evaluation_id: {result.get('EvalID', 'unknown')})")
+                logger.info(f"SAM job submitted to Nomad (evaluation_id: {result.get('EvalID', 'unknown')})")
                 return True
 
         except Exception as e:
@@ -100,7 +97,6 @@ class SAMServeManager:
             logger.info("Stopping SAM Nomad job...")
 
             async with httpx.AsyncClient() as client:
-                # Delete job from Nomad (purge=true removes it completely)
                 response = await client.delete(
                     f"{self.nomad_url}/v1/job/{self.job_name}?purge=true",
                     timeout=HTTP_TIMEOUT,
@@ -109,7 +105,7 @@ class SAMServeManager:
 
             self.is_deployed = False
             self.allocation_id = None
-            logger.info("✓ SAM Nomad job stopped and resources freed")
+            logger.info("SAM Nomad job stopped and resources freed")
             return True
 
         except Exception as e:
@@ -117,24 +113,19 @@ class SAMServeManager:
             return False
 
     async def get_status(self) -> dict[str, Any]:
-        """Get SAM container status.
-
-        Directly checks SAM server health on OnyxCortex.
+        """Get SAM container status by checking health on the host.
 
         Returns:
             Status dict with health and endpoint.
         """
         try:
-            # SAM runs directly on OnyxCortex at port 9470 (not via Nomad)
-            sam_endpoint = "http://10.0.0.26:9470"
             sam_health = None
             is_healthy = False
 
             async with httpx.AsyncClient() as client:
-                # Check SAM server health directly
                 try:
                     health_response = await client.get(
-                        f"{sam_endpoint}/health",
+                        f"{self.endpoint}/health",
                         timeout=5.0,
                     )
                     if health_response.status_code == 200:
@@ -145,7 +136,7 @@ class SAMServeManager:
 
             return {
                 "status": "healthy" if is_healthy else "unhealthy",
-                "endpoint": sam_endpoint,
+                "endpoint": self.endpoint,
                 "sam_health": sam_health,
                 "is_deployed": is_healthy,
             }
@@ -154,13 +145,13 @@ class SAMServeManager:
             logger.debug(f"Failed to get status: {e}")
             return {
                 "status": "error",
-                "endpoint": "http://10.0.0.26:9470",
+                "endpoint": self.endpoint,
                 "error": str(e),
                 "is_deployed": False,
             }
 
     async def interact(self, payload: dict[str, Any]) -> dict[str, Any]:
-        """Forward segmentation request to Nomad-deployed SAM server.
+        """Forward segmentation request to SAM server.
 
         Args:
             payload: Segmentation request dict.
@@ -169,7 +160,6 @@ class SAMServeManager:
             Segmentation result from SAM.
         """
         try:
-            # Get current SAM status to find endpoint
             status = await self.get_status()
             sam_endpoint = status.get("endpoint")
 

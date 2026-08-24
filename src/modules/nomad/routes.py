@@ -5,8 +5,8 @@ from typing import Any
 
 from fastapi import APIRouter, HTTPException
 
-from .models import NomadJobRequest, NomadJobStatus, NomadClusterStatus, GPUStatus
-from .service import NomadManager
+from src.modules.nomad.models import NomadJobRequest
+from src.modules.nomad.service import NomadManager
 
 logger = logging.getLogger(__name__)
 router = APIRouter()

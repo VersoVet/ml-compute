@@ -10,7 +10,7 @@ from typing import Any
 from fastapi import APIRouter
 from pydantic import BaseModel
 
-from .service import sam_health, sam_info, sam_interact, sam_ready
+from src.modules.serve_proxy.service import sam_health, sam_info, sam_interact, sam_ready
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["SAM"])
@@ -54,7 +54,7 @@ async def sam_segment(request: InteractRequest) -> dict[str, Any]:
     Returns:
         Segmentation mask and metadata.
     """
-    return await sam_interact(request.dict())
+    return await sam_interact(request.model_dump())
 
 
 @router.get("/sam/info")

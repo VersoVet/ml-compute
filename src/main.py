@@ -16,6 +16,7 @@ import httpx
 from fastapi import FastAPI, HTTPException
 from onyx_sdk import OnyxClient
 
+from src.config import CONFIG
 from src.models import (
     HealthResponse,
     PageInfo,
@@ -25,8 +26,8 @@ from src.models import (
 from src.modules.jobs import routes as jobs_routes
 from src.modules.models import routes as models_routes
 from src.modules.nodes import routes as nodes_routes
-from src.modules.nomad.service import NomadManager
 from src.modules.nomad import routes as nomad_routes
+from src.modules.nomad.service import NomadManager
 from src.modules.sam import routes as sam_routes
 from src.modules.serve import routes as serve_routes
 from src.modules.serve_proxy import routes as serve_proxy_routes
@@ -90,7 +91,7 @@ class RayClient:
 # Global clients
 ray_client = RayClient()
 nomad_manager = NomadManager()
-onyx = None
+onyx: OnyxClient | None = None
 
 
 @asynccontextmanager
@@ -110,9 +111,6 @@ async def lifespan(app: FastAPI):
     try:
         onyx = OnyxClient(skill_name="ml-compute")
         onyx.start()
-        # Pass client to modules for status publishing
-        from src.modules.jobs import routes as jobs_routes
-
         jobs_routes.set_onyx(onyx)
         logger.info("OnyxClient initialized")
     except Exception as e:
@@ -174,8 +172,8 @@ async def health() -> HealthResponse:
     return HealthResponse(
         status="healthy",
         ray_cluster={
-            "head_node": "10.0.0.44",
-            "port": 6379,
+            "head_node": CONFIG["ray"]["head_node"],
+            "port": CONFIG["ray"].get("gcs_port", 6379),
             "status": "running",
             "workers_connected": cluster_health.get("workers", 0),
             "resources": cluster_health.get("resources", {}),

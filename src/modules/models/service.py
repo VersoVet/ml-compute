@@ -1,13 +1,15 @@
 """ML models registry service layer."""
 
 import logging
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+from src.config import CONFIG
+
 logger = logging.getLogger(__name__)
 
-MODELS_DIR = Path("/opt/onyx/skills/ml-compute/models")
+MODELS_DIR = Path(CONFIG.get("models", {}).get("base_dir", "/opt/onyx/skills/ml-compute/models"))
 
 
 async def scan_models() -> dict[str, Any]:
@@ -27,7 +29,7 @@ async def scan_models() -> dict[str, Any]:
             try:
                 stat = model_path.stat()
                 size_mb = stat.st_size / (1024 * 1024)
-                created = datetime.fromtimestamp(stat.st_ctime)
+                created = datetime.fromtimestamp(stat.st_ctime, tz=UTC)
 
                 model_type = model_path.parent.name
 

@@ -1,6 +1,6 @@
 """Pydantic models for ml-compute API."""
 
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any
 
 from pydantic import BaseModel, Field
@@ -11,7 +11,7 @@ class HealthResponse(BaseModel):
 
     status: str = Field(..., description="Health status: healthy/unhealthy")
     ray_cluster: dict[str, Any] = Field(..., description="Ray cluster info")
-    timestamp: datetime = Field(default_factory=datetime.utcnow)
+    timestamp: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
 
 class ReadyResponse(BaseModel):

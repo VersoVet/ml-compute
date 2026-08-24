@@ -41,3 +41,13 @@ serve:
   default_num_replicas: 1
   default_gpu_memory_utilization: 0.7
   http_timeout: 15.0
+
+nomad:
+  url: "http://10.0.0.44:4646"
+  timeout: 30.0
+
+sam:
+  job_name: "sam-inference"
+  endpoint_port: 9470
+  host: "10.0.0.26"
+  job_spec_path: "/opt/onyx/skills/ml-compute/jobs/sam/sam_job_spec.json"

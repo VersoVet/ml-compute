@@ -11,6 +11,9 @@ pydantic-settings==2.1.0
 # HTTP client (async)
 httpx==0.25.0
 
+# Configuration
+pyyaml==6.0.1
+
 # Monitoring & logging
 python-json-logger==2.0.7
 

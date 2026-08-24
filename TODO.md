@@ -145,18 +145,18 @@
 - ✓ GPU conflict detection implemented in script
 - ✓ Prometheus + Grafana stack ready to deploy
 
-## Phase 11: Monitoring Infrastructure Deployment (TODO)
+## Phase 11: Monitoring Infrastructure Deployment (DONE)
 
-- [ ] Installer Prometheus + Grafana stack
+- [x] Installer Prometheus + Grafana stack
   - [x] Configuration Prometheus (prometheus.yml)
   - [x] Docker Compose stack (Prometheus + Grafana)
   - [x] Grafana data source provisioning
   - [x] Documentation SETUP.md + README.md
-  - [ ] Déployer sur OnyxSoma
-  - [ ] Installer Node Exporter sur tous les workers
-  - [ ] Installer NVIDIA GPU Exporter sur workers GPU
-  - [ ] Créer dashboards Grafana personnalisés (Ray metrics + Nomad metrics)
-  - [ ] Configurer alertes Prometheus
+  - [x] Déployer sur OnyxSoma
+  - [x] Installer Node Exporter sur tous les workers
+  - [x] Installer NVIDIA GPU Exporter sur workers GPU
+  - [x] Créer dashboards Grafana personnalisés (Ray metrics + Nomad metrics)
+  - [x] Configurer alertes Prometheus
 
 ## Phase 12: SAM Nomad Integration & Monitoring Deployment (DONE)
 
@@ -175,16 +175,16 @@
 - [x] Documentation SAM deployment (jobs/sam/README.md)
 - [x] DIAGRAM.md avec architecture Nomad + Ray
 
-### 3. Monitoring Prometheus + Grafana (IN PROGRESS)
+### 3. Monitoring Prometheus + Grafana (DONE)
 - [x] Configuration Prometheus avec scrape Nomad metrics
 - [x] Docker Compose stack (Prometheus :9090, Grafana :3000)
 - [x] Grafana data source provisioning
 - [x] Script de déploiement deploy-monitoring.sh
-- [ ] Déployer stack sur OnyxSoma (en cours)
-- [ ] Installer Node Exporter sur workers
-- [ ] Installer NVIDIA GPU Exporter sur workers GPU
-- [ ] Créer dashboards Grafana (Nomad + Ray)
-- [ ] Configurer alertes Prometheus
+- [x] Déployer stack sur OnyxSoma
+- [x] Installer Node Exporter sur workers
+- [x] Installer NVIDIA GPU Exporter sur workers GPU
+- [x] Créer dashboards Grafana (Nomad + Ray)
+- [x] Configurer alertes Prometheus
 
 ## Phase 9: Cluster Expansion & Architecture Clarification (DONE)
 
@@ -203,47 +203,7 @@
   - [x] Mise à jour ARCHITECTURE.md avec clarification
   - [x] Mise à jour DIAGRAM.md avec separation nette
 
-## Phase 13: SAM OOM Fix + Nuclio Proxy (IN PROGRESS)
+## Phase 13: SAM OOM Fix + Nuclio Proxy (DONE — traité par bone-annotator)
 
-### 1. SAM Nomad OOM Resolution (IN PROGRESS)
-- [ ] Résoudre SAM "OOM Killed" (exit code 137)
-  - [x] Identifier cause: pip install torch au runtime = 526 MB + décompression
-  - [x] Solution: Pré-compiler Dockerfile avec PyTorch + segment-anything
-  - [x] Créer Dockerfile optimisé (nvidia/cuda + pre-built wheels)
-  - [x] Corriger sam_server.py (image decoding via PIL)
-  - [x] Mettre à jour sam_job_spec.json (utiliser image locale)
-  - [ ] Build Docker en cours (~30-40 min) [ETA: ~20 min remaining]
-  - [ ] Déployer job Nomad (bash deploy.sh)
-  - [ ] Tester endpoint /api/serve/sam/health (curl)
-  - [ ] Valider segmentation via /api/serve/sam/interact
-
-### 2. Nuclio Proxy Deployment (READY)
-- [x] Créer fonction Nuclio pour proxy SAM
-  - [x] model_handler.py: Forward requêtes vers ml-compute
-  - [x] function.yaml: Configuration Nuclio (runtime, triggers)
-  - [x] requirements.txt: Dépendances (requests, numpy)
-  - [x] test_proxy.py: Suite de tests du proxy
-  - [x] README.md: Documentation déploiement + integration
-- [ ] Trouver/installer Nuclio sur OnyxSynapse
-  - [ ] Vérifier port Nuclio (8070, 9090, etc?)
-  - [ ] Si absent: installer Nuclio Docker container
-- [ ] Déployer fonction sam-proxy (nuctl deploy -f function.yaml)
-- [ ] Tester proxy: python3 test_proxy.py
-
-### 3. CVAT Integration (PLANNING)
-- [ ] Configurer SAM comme AI Tool dans CVAT
-  - [ ] Endpoint: http://10.0.0.59:9070/segment
-  - [ ] Method: POST
-  - [ ] Format: JSON (image_base64, points, etc)
-- [ ] Tester workflow CVAT → Nuclio → SAM
-- [ ] Documenter intégration (CVAT_INTEGRATION.md)
-
-### Fichiers Créés/Modifiés
-- [x] jobs/sam/Dockerfile (Pré-compilé PyTorch)
-- [x] jobs/sam/sam_server.py (Image decoding fix)
-- [x] jobs/sam/sam_job_spec.json (Image locale + python3)
-- [x] jobs/sam/deploy.sh (Script automation déploiement)
-- [x] jobs/sam/test_sam_endpoint.py (Tests endpoint SAM)
-- [x] jobs/nuclio-sam-proxy/* (Fonction Nuclio complète)
-- [x] jobs/DEPLOYMENT_PLAN.md (Timeline + checklist)
-- [x] jobs/CVAT_INTEGRATION.md (Guide d'intégration)
+> SAM deployment, Nuclio proxy et intégration CVAT sont désormais gérés par le skill **bone-annotator**.
+> Les fichiers templates dans `jobs/sam/` et `jobs/nuclio-sam-proxy/` restent comme référence.
