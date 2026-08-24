@@ -67,7 +67,11 @@ def _get_checkpoint_path(model_name: str) -> str | None:
 
 
 def _load_model(model_name: str) -> None:
-    """Load a SAM model onto GPU (blocking, call from async with lock)."""
+    """Load a SAM model onto GPU (blocking, call from async with lock).
+
+    Safe: only unloads the current model AFTER the new one loads successfully.
+    If loading fails, the previous model remains active.
+    """
     global sam_predictor, active_model
 
     entry = MODEL_REGISTRY.get(model_name)
@@ -80,18 +84,23 @@ def _load_model(model_name: str) -> None:
             f"Checkpoint not found: {os.path.join(MODELS_DIR, entry['checkpoint'])}"
         )
 
-    # Unload current model
+    # Load new model FIRST (before unloading old one)
+    logger.info("Loading SAM model %s (type=%s)...", model_name, entry["model_type"])
+    try:
+        new_model = sam_model_registry[entry["model_type"]](checkpoint=checkpoint)
+    except Exception as e:
+        logger.error("Failed to load %s, keeping %s active: %s", model_name, active_model, e)
+        raise
+
+    # New model loaded successfully — now unload old and swap
     if sam_predictor is not None:
         sam_predictor = None
         if torch.cuda.is_available():
             torch.cuda.empty_cache()
         logger.info("Unloaded previous model %s", active_model)
 
-    # Load new model
-    logger.info("Loading SAM model %s (type=%s)...", model_name, entry["model_type"])
-    sam_model = sam_model_registry[entry["model_type"]](checkpoint=checkpoint)
-    sam_model.to(device=device)
-    sam_predictor = SamPredictor(sam_model)
+    new_model.to(device=device)
+    sam_predictor = SamPredictor(new_model)
     active_model = model_name
     logger.info("✓ SAM model %s loaded successfully", model_name)
 
