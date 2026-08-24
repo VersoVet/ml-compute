@@ -158,9 +158,23 @@ def handler(context, event):
 
         context.logger.info(f"Polygon: {len(polygon)} points")
 
-        # CVAT expects a flat list of [x, y] pairs
+        # CVAT frontend expects a flat list [x1, y1, x2, y2, ...]
+        flat_points = []
+        for pt in polygon:
+            flat_points.extend([pt[0], pt[1]])
+
+        # Return as single shape in CVAT annotation format
+        response = {
+            "shapes": [
+                {
+                    "type": "polygon",
+                    "points": flat_points,
+                }
+            ]
+        }
+
         return context.Response(
-            body=json.dumps(polygon),
+            body=json.dumps(response),
             headers={"Content-Type": "application/json"},
             content_type="application/json",
             status_code=200,
