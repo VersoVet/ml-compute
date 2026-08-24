@@ -1,12 +1,12 @@
 apiVersion: "nuclio.io/v1"
 kind: "NuclioFunction"
 metadata:
-  name: "pth-sam-vit-h"
+  name: "pth-facebookresearch-sam-vit-h"
   namespace: "nuclio"
   labels:
     nuclio.io/project-name: "cvat"
   annotations:
-    name: "SAM ViT-H"
+    name: "Segment Anything"
     type: "interactor"
     framework: "pytorch"
     spec: ""
