@@ -1,8 +1,6 @@
-# ml-compute - Bibliographie
+# Bibliographie
 
-## Articles de reference
+*0 article(s) — généré le 2026-08-24 13:35 UTC*
 
-| Cle | Titre | Auteurs | Annee | Fiche |
-|-----|-------|---------|-------|-------|
-
-> Index vide. Lancer `/forge-biblio sync` pour importer depuis Zotero (collection `forge/ml-compute`).
+| Fichier | Clé Zotero | Taille |
+|---------|------------|--------|
