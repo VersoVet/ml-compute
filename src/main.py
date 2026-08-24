@@ -23,6 +23,8 @@ from src.models import (
     PagesResponse,
     ReadyResponse,
 )
+from src.modules.compute_backends import routes as compute_routes
+from src.modules.compute_backends.service import BackendManager
 from src.modules.jobs import routes as jobs_routes
 from src.modules.models import routes as models_routes
 from src.modules.nodes import routes as nodes_routes
@@ -91,6 +93,7 @@ class RayClient:
 # Global clients
 ray_client = RayClient()
 nomad_manager = NomadManager()
+backend_manager = BackendManager()
 onyx: OnyxClient | None = None
 
 
@@ -117,8 +120,9 @@ async def lifespan(app: FastAPI):
         logger.debug(f"OnyxClient initialization (optional): {e}")
         onyx = None
 
-    # Set nomad manager in routes
+    # Set managers in routes
     nomad_routes.set_nomad_manager(nomad_manager)
+    compute_routes.set_backend_manager(backend_manager)
 
     yield
 
@@ -150,6 +154,7 @@ app.include_router(serve_routes.router, prefix="/api/serve", tags=["serve"])
 app.include_router(sam_routes.router, prefix="/api/serve", tags=["SAM Control"])
 app.include_router(serve_proxy_routes.router, prefix="/api/serve", tags=["SAM"])
 app.include_router(models_routes.router, prefix="/api/models", tags=["models"])
+app.include_router(compute_routes.router, prefix="/api", tags=["compute"])
 
 
 @app.get("/health", response_model=HealthResponse, tags=["status"])
