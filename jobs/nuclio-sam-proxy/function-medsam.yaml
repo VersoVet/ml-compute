@@ -10,7 +10,7 @@ metadata:
     type: "interactor"
     framework: "pytorch"
     spec: ""
-    min_pos_points: "1"
+    min_pos_points: "0"
     min_neg_points: "0"
     startswith_box: "false"
     startswith_box_optional: "true"
@@ -32,7 +32,7 @@ spec:
     directives:
       preCopy:
         - kind: RUN
-          value: "pip install requests opencv-python-headless numpy"
+          value: "pip install requests"
 
   triggers:
     default-http:
