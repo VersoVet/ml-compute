@@ -30,7 +30,7 @@ logger = logging.getLogger("medsam2-server")
 
 # Configuration
 CHECKPOINT_PATH = os.environ.get("MEDSAM2_CHECKPOINT", "/models/MedSAM2_latest.pt")
-SAM2_CONFIG = os.environ.get("SAM2_CONFIG", "sam2.1_hiera_t.yaml")
+SAM2_CONFIG = os.environ.get("SAM2_CONFIG", "configs/sam2.1/sam2.1_hiera_t.yaml")
 PORT = int(os.environ.get("MEDSAM2_PORT", "9473"))
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 
