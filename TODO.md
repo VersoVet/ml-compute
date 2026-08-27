@@ -65,7 +65,7 @@ Endpoints /api/backends et /api/compute/*. Auto-selection local > lightning > ka
 
 - [x] Fix `jobs/sam/sam_server.py` : `/api/embed` retourne `blob` + `shape`
 - [x] Ajouter `detail` a `SegmentationResponse`
-- [ ] Rebuild/restart container `sam-gpu` sur OnyxCortex (image sam-inference)
+- [x] Rebuild/restart container `sam-gpu` sur OnyxCortex (image sam-inference v0.2.3)
 - [ ] Redeploy fonction MedSAM Nuclio si necessaire (bone-annotator)
 
 ### Compute backends — prochaines etapes
