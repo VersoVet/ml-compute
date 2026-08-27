@@ -117,6 +117,9 @@ graph LR
 **Point cle** : SAM et Ray Worker partagent le meme GPU sur OnyxCortex.
 Il faut stopper SAM avant de lancer un training job (coordination manuelle via bone-annotator).
 
+**Protocole CVAT** : Nuclio appelle `POST http://10.0.0.26:9470/api/embed` qui doit
+retourner `{blob, shape}` (source : `jobs/sam/sam_server.py`, image `sam-inference`).
+
 ## Job Submission Flow
 
 ```mermaid

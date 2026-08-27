@@ -61,6 +61,13 @@ Endpoints /api/backends et /api/compute/*. Auto-selection local > lightning > ka
 
 ## Taches actives
 
+### SAM / CVAT embed (2026-08-27)
+
+- [x] Fix `jobs/sam/sam_server.py` : `/api/embed` retourne `blob` + `shape`
+- [x] Ajouter `detail` a `SegmentationResponse`
+- [ ] Rebuild/restart container `sam-gpu` sur OnyxCortex (image sam-inference)
+- [ ] Redeploy fonction MedSAM Nuclio si necessaire (bone-annotator)
+
 ### Compute backends — prochaines etapes
 
 - [ ] Kaggle : debloquer GPU (verification telephonique en attente)

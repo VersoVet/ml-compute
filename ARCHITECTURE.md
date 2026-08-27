@@ -163,9 +163,12 @@ skill client → POST /api/compute/submit → BackendManager
                                             └── kaggle: kernels push → T4 GPU
 ```
 
-### 7. **sam/** et **serve_proxy/** (LEGACY)
-Modules proxy SAM historiques. SAM est desormais gere par bone-annotator.
-Ces modules sont conserves temporairement mais seront supprimes.
+### 7. **sam/** et **serve_proxy/** (LEGACY proxy API)
+Modules proxy SAM historiques dans l'API FastAPI. SAM runtime est gere par bone-annotator.
+Ces modules API sont conserves temporairement mais seront supprimes.
+
+Le serveur Docker source reste dans `jobs/sam/sam_server.py` (image `sam-inference` sur OnyxCortex:9470).
+Contrat CVAT : `POST /api/embed` retourne `{blob, shape}` ; `SegmentationResponse` inclut `detail`.
 
 ---
 
@@ -239,7 +242,7 @@ ml-compute/
 ├── config/ml-compute.yaml      # Configuration centralisee
 ├── docker-compose.yml          # Ray head + API
 ├── Dockerfile                  # FastAPI wrapper
-├── manifest.json               # Config Forge (v0.2.0)
+├── manifest.json               # Config Forge (v0.2.3)
 ├── cron.json                   # Health checks
 └── backup.json                 # Strategie sauvegarde
 ```

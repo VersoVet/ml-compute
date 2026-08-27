@@ -447,7 +447,7 @@ curl -X POST http://10.0.0.44:9469/api/jobs \
 
 ---
 
-## SAM / MedSAM (HORS SCOPE)
+## SAM / MedSAM (HORS SCOPE runtime)
 
 SAM/MedSAM pour segmentation interactive est gere par **bone-annotator**, directement sur OnyxCortex.
 
@@ -455,11 +455,35 @@ SAM/MedSAM pour segmentation interactive est gere par **bone-annotator**, direct
 CVAT (OnyxSynapse) -> Nuclio -> SAM Docker (OnyxCortex:9470) [DIRECT]
 ```
 
-Ne passe PAS par Ray ni ml-compute. Voir `bone-annotator/API.md`.
+Ne passe PAS par Ray ni l'API ml-compute. Voir `bone-annotator/API.md`.
+
+Le **code source** du serveur Docker reste dans `jobs/sam/sam_server.py` (image `sam-inference:v3-multimodel`).
+
+### Contrat CVAT `/api/embed` (serveur SAM :9470)
+
+L'interactor CVAT exige `blob` **et** `shape` :
+
+```json
+{
+  "blob": "<base64 embedding bytes>",
+  "shape": [1, 256, 64, 64]
+}
+```
+
+`SegmentationResponse` expose aussi `detail` pour les erreurs metier (ex: prompts manquants).
+
+```bash
+# Health SAM direct (OnyxCortex)
+curl http://10.0.0.26:9470/health
+```
 
 ---
 
 ## Updates
+
+### [v0.2.3] 2026-08-27
+- Fix SAM `/api/embed` : reponse `blob` + `shape` pour l'interactor CVAT
+- `SegmentationResponse.detail` pour erreurs metier
 
 ### [v0.2.2] 2026-08-24
 - Module compute_backends : interface unifiee multi-backend (local, Lightning AI, Kaggle)
