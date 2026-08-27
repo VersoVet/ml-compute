@@ -18,8 +18,8 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY entrypoint.sh /app/
 RUN chmod +x /app/entrypoint.sh
 
-# Copy onyx-sdk wheel if available (will be mounted by docker-compose)
-COPY onyx_sdk*.whl ./ 2>/dev/null || true
+# Copy the SDK wheel; docker-compose mounts the same file at runtime.
+COPY onyx_sdk.whl ./
 
 # Copy source code
 COPY src/ src/
