@@ -243,6 +243,7 @@ class SegmentationResponse(BaseModel):
     status: str
     masks: Any | None = None
     iou_predictions: Any | None = None
+    detail: str | None = None
 
 
 async def _segment_impl(request: SegmentationRequest) -> SegmentationResponse:
@@ -317,7 +318,7 @@ async def interact(request: SegmentationRequest) -> SegmentationResponse:
 
 
 @app.post("/api/embed")
-async def embed(request: Request) -> dict[str, str]:
+async def embed(request: Request) -> dict[str, str | list[int]]:
     """Get image embeddings for CVAT AI Tool integration."""
     if sam_predictor is None:
         raise HTTPException(status_code=503, detail="SAM not initialized")
@@ -332,7 +333,10 @@ async def embed(request: Request) -> dict[str, str]:
         sam_predictor.set_image(np.array(image))
         features = sam_predictor.get_image_embedding()
         feat_np = features.cpu().numpy() if features.is_cuda else features.numpy()
-        return {"blob": base64.b64encode(feat_np.tobytes()).decode()}
+        return {
+            "blob": base64.b64encode(feat_np.tobytes()).decode(),
+            "shape": list(feat_np.shape),
+        }
     except Exception as e:
         logger.error("Embedding failed: %s", e, exc_info=True)
         raise HTTPException(status_code=500, detail=f"Embedding failed: {e}")
