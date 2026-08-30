@@ -190,6 +190,13 @@ Dual-Head U-Net pour segmentation + landmarks heatmaps.
 - Landmarks Head : Gaussian heatmaps avec SGR
 - Encodeur : ResNet34/50/Swin (pretrained ImageNet)
 
+### bone-ml BoneSeg (`jobs/bone-ml/train_boneseg.py`)
+BoneSegNet (smp U-Net + MC-Dropout, ResNet50) pour segmentation osseuse multi-classe.
+- Soumis par bone-ml via `POST /api/jobs` (module boneseg)
+- Annotations PG `bone_annotations` avec tiers gold/silver/pseudo
+- Loss tier-weighted (CE + Dice), early stopping, checkpoint avec metadonnees
+- Update `boneseg_training_runs` en fin de job
+
 ---
 
 ## Monitoring

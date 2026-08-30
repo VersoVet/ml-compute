@@ -78,6 +78,27 @@ graph TB
     BoneML -->|POST /api/jobs| API
     BoneAnnotator -->|POST /api/jobs| API
     BoneRec -->|POST /api/jobs| API
+    BoneML -->|POST /api/boneseg/train| API
+```
+
+## BoneSeg Training Flow
+
+```mermaid
+sequenceDiagram
+    actor BoneML as bone-ml :9463
+    participant API as ml-compute :9469
+    participant Ray as Ray Head
+    participant Worker as OnyxCortex GPU
+    participant PG as PostgreSQL bone_annotations
+
+    BoneML->>PG: register_training_run
+    BoneML->>API: POST /api/jobs train_boneseg.py
+    API->>Ray: submit job num_gpus=1
+    Ray->>Worker: train BoneSegNet
+    Worker->>PG: load annotations tiers
+    Worker->>Worker: train early stopping
+    Worker->>PG: update best_dice metrics
+    Worker-->>Ray: SUCCEEDED
 ```
 
 ## Separation SAM / ml-compute

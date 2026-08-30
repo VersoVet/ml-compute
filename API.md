@@ -445,6 +445,19 @@ curl -X POST http://10.0.0.44:9469/api/jobs \
 
 **Env vars** : BONE_TYPE, EPOCHS, BATCH_SIZE, IMG_SIZE, ENCODER_NAME, PG_PASSWORD (required), PARENT_MODEL (optional)
 
+### bone-ml BoneSeg (`jobs/bone-ml/train_boneseg.py`)
+
+Soumis par bone-ml (`POST /api/boneseg/train`). Entrypoint Ray :
+
+```bash
+python jobs/bone-ml/train_boneseg.py
+```
+
+**Env vars** : BONE_TYPE, EPOCHS, BATCH_SIZE, IMG_SIZE, BASE_MODEL, RUN_ID, RUN_NAME,
+TIERS, PG_HOST/PORT/DB/USER/PASSWORD, LEARNING_RATE, WEIGHT_DECAY, ML_MODELS_DIR
+
+**Sortie** : `{ML_MODELS_DIR}/{RUN_NAME}_best.pt` + update PG `boneseg_training_runs`
+
 ---
 
 ## SAM / MedSAM (HORS SCOPE runtime)
@@ -480,6 +493,9 @@ curl http://10.0.0.26:9470/health
 ---
 
 ## Updates
+
+### [v0.2.4] 2026-08-30
+- Job template `jobs/bone-ml/train_boneseg.py` pour entrainement BoneSegNet (bone-ml)
 
 ### [v0.2.3] 2026-08-27
 - Fix SAM `/api/embed` : reponse `blob` + `shape` pour l'interactor CVAT
