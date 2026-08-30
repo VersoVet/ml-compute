@@ -66,7 +66,7 @@ Endpoints /api/backends et /api/compute/*. Auto-selection local > lightning > ka
 - [x] Fix `jobs/sam/sam_server.py` : `/api/embed` retourne `blob` + `shape`
 - [x] Ajouter `detail` a `SegmentationResponse`
 - [x] Rebuild/restart container `sam-gpu` sur OnyxCortex (image sam-inference v0.2.3)
-- [ ] Redeploy fonction MedSAM Nuclio si necessaire (bone-annotator)
+- [x] Redeploy fonction MedSAM Nuclio si necessaire (bone-annotator) — fix v2 shapes 2026-08-28
 
 ### Compute backends — prochaines etapes
 
@@ -75,6 +75,10 @@ Endpoints /api/backends et /api/compute/*. Auto-selection local > lightning > ka
 - [ ] Ajouter backend DigitalOcean (cle API stockee dans Vault)
 - [ ] Transfert fichiers : upload datasets / download modeles entre backends
 - [ ] Job queue : file d'attente si tous les backends GPU sont occupes
+
+### BoneSeg training job
+
+- [x] Script `jobs/bone-ml/train_boneseg.py` (BoneSegNet, tier-weighted loss, PG update)
 
 ### Nettoyage legacy SAM
 
