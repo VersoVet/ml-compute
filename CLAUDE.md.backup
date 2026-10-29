@@ -1,0 +1,1072 @@
+# ml-compute - Guide de Développement Forge
+
+> **FICHIER GÉNÉRÉ PAR FORGE - NE JAMAIS MODIFIER**
+> En cas de modification, régénérer avec: `forge regenerate-claude ml-compute`
+> Ou via API: POST /api/skills/ml-compute/regenerate-claude
+
+---
+
+## Écosystème Onyx Forge
+
+### Architecture Globale
+```
+OnyxDendrite (10.0.0.13)     OnyxSoma (10.0.0.44)
+├── Forge (4080)             ├── Core (8050)
+│   └── Dev, Validate,       │   └── Registry, Vault
+│       Review, Deploy       │
+├── LLM Router (8055)        ├── Skills (8xxx)
+│   └── Groq, SambaNova,     │   └── APIs déployées
+│       Gemini, Codex        │
+└── Skills Dev               └── Redis, PostgreSQL
+    └── /home/onyx/projects/skills/
+```
+
+### Cycle de Vie d'un Skill
+```
+INTENT → PLAN → INIT → DEV → VALIDATE → REVIEW → DEPLOY
+```
+
+### Services Forge (APIs HTTP sur 10.0.0.13:4080)
+| Service | Endpoint | Description |
+|---------|----------|-------------|
+| **Validation** | POST `/api/validate/{skill}` | 22 phases de validation, rapport structuré |
+| **Revue** | POST `/api/review/{skill}` | Revue multi-LLM (Groq+SambaNova+Gemini) |
+| **Déploiement** | POST `/api/deploy/{skill}` | Déploiement complet (git, SSH, systemd) |
+
+---
+
+## ⚠️ VALIDATION - À LIRE EN PREMIER!
+
+**IMPORTANT**: Votre code sera automatiquement validé par `curl -X POST http://10.0.0.13:4080/api/validate/ml-compute`
+
+Le validator va checker **22 phases**. Lisez cette section pour éviter les erreurs.
+
+### Phase 1: Structure (Fichiers Obligatoires)
+❌ **ERREUR si**:
+- `CLAUDE.md` manquant (auto-généré, ne pas supprimer)
+- `API.md` manquant (documenter les endpoints)
+- `DIAGRAM.md` manquant (diagramme Mermaid architecture)
+- `manifest.json` manquant ou invalide
+- `src/main.py` manquant (point d'entrée FastAPI)
+- `.gitignore` manquant (sécurité)
+
+✅ **À faire**:
+```
+ml-compute/
+├── CLAUDE.md              # Auto-généré - NE PAS MODIFIER
+├── API.md                 # ← À CRÉER: documenter endpoints
+├── ARCHITECTURE.md        # ← À CRÉER: structure du code
+├── DIAGRAM.md             # ← AUTO-GÉNÉRÉ: diagramme Mermaid architecture
+├── diagram.png            # ← RENDU: image du diagramme
+├── TODO.md                # ← À CRÉER: tâches en cours
+├── manifest.json          # Config (auto-généré)
+├── backup.json            # ← À CRÉER: stratégie de sauvegarde
+├── .gitignore             # ← À CRÉER: patterns à ignorer
+└── src/main.py            # Point d'entrée
+```
+
+### Phase 3: Manifest.json - Champs Obligatoires
+❌ **ERREUR si**:
+- `core.name` manquant
+- `core.type` invalide (doit être: python, node, docker, script, custom)
+- `core.description` manquant
+- `core.brain_area` invalide
+- `core.routing.port` en dehors de 8000-9999
+- `forge.type` ≠ `core.type` (DOIT matcher!)
+- `heart.deployment.target_host` invalide
+
+✅ **Exemple correct**:
+```json
+{
+  "core": {
+    "name": "ml-compute",
+    "type": "docker",
+    "description": "Description courte du skill",
+    "brain_area": "prefrontal",
+    "routing": {
+      "port": 9469
+    }
+  },
+  "forge": {
+    "type": "docker"
+  },
+  "heart": {
+    "deployment": {
+      "target_host": "OnyxSoma"
+    }
+  }
+}
+```
+
+**Déploiement multi-cible** (optionnel, remplace `target_host`) :
+```json
+{
+  "heart": {
+    "deployment": {
+      "targets": [
+        {"host": "10.0.0.44", "name": "OnyxSoma", "platform": "linux"},
+        {"host": "10.0.0.59", "name": "OnyxSynapse", "platform": "linux"}
+      ],
+      "default_target": "10.0.0.44"
+    }
+  }
+}
+```
+
+### Phase 7: Git & .gitignore
+❌ **ERREUR si**:
+- `.gitignore` manquant
+- `.gitignore` n'inclut pas: `*.pyc`, `__pycache__`, `.env`, `*.key`, `secrets*`
+- Remote `origin` non configuré
+- Branche `dev` non créée
+- Credentials/tokens dans le code
+
+### Phase 15: Taille Fichiers (MAX 300 lignes)
+❌ **ERREUR si**:
+- `src/main.py` > 300 lignes
+- `src/modules/{module}/service.py` > 300 lignes
+- `src/modules/{module}/routes.py` > 300 lignes
+
+✅ **À faire**:
+- Chaque module < 300 lignes
+- Split si nécessaire en `service.py`, `routes.py`, `utils.py`
+
+### Phase 16: Type Checking (mypy - ZÉRO ERREUR)
+❌ **ERREUR si**:
+- Paramètres sans type annotation
+- Retours sans type annotation
+- Types incomplets/incorrects
+
+✅ **Exemple correct**:
+```python
+async def validate(skill_name: str, timeout: float = 30.0) -> dict:
+    """Valide la structure d'un skill."""
+    return {"valid": True}
+
+# INCORRECT ❌
+async def validate(skill_name, timeout=30):
+    return {"valid": True}
+```
+
+### Phase 18: Docstrings (Google convention - 80%+ coverage)
+❌ **ERREUR si**:
+- Fonctions publiques sans docstring
+- Docstring sans description
+- Pas de Args/Returns
+- Convention non Google
+
+✅ **Exemple correct**:
+```python
+def deploy(skill_name: str, target: str) -> bool:
+    """Déploie un skill sur un host.
+    
+    Args:
+        skill_name: Nom du skill (kebab-case)
+        target: Host cible (IP ou hostname)
+        
+    Returns:
+        True si succès, False sinon
+        
+    Raises:
+        DeploymentError: Si host inaccessible
+    """
+    pass
+```
+
+### Phase 19: Health Check Cron (skills service uniquement)
+❌ **ERREUR si** (run_mode=service) :
+- `cron.json` manquant
+- Pas de tâche `daily-health-check` dans cron.json
+- Tâche désactivée
+
+✅ **Minimum requis** dans `cron.json` :
+```json
+{
+  "tasks": [
+    {
+      "id": "daily-health-check",
+      "name": "Daily Health Check",
+      "schedule": "0 0 * * *",
+      "command": {"type": "script", "script": "/opt/onyx/forge/bin/onyx-health-check"},
+      "timeout_seconds": 120,
+      "enabled": true,
+      "notify_on_failure": true
+    }
+  ]
+}
+```
+**Note**: Forge auto-injecte cette tâche au déploiement si absente. Mais `cron.json` doit exister.
+
+### Phase 20: Stratégie de Sauvegarde (skills service uniquement)
+❌ **ERREUR si** (run_mode=service) :
+- `backup.json` manquant
+- `strategy` invalide (doit être `active` ou `none`)
+- `strategy: active` sans entries
+- `data_type` invalide
+- `paths` manquant pour les types fichiers
+
+✅ **Comment créer `backup.json`** :
+
+**Étape 1** — Consulter onyx-recovery pour connaître les types et criticités :
+```bash
+curl -s http://10.0.0.44:8083/api/backup-targets | jq .
+```
+Recovery retourne les `data_types` disponibles (avec les champs requis par type),
+les niveaux de `criticality`, et des exemples de backup.json.
+**Ne jamais coder les types en dur** — toujours consulter cet endpoint.
+
+**Étape 2** — Auditer le skill pour identifier les données persistantes :
+- Bases de données (SQLite, Docker MySQL/PostgreSQL/MariaDB)
+- Fichiers de configuration (`config/`)
+- Fichiers générés (uploads, exports, rapports)
+- Volumes Docker
+- Collections Qdrant (snapshots API)
+- Si aucune donnée persistante → `strategy: "none"`
+
+**Étape 3** — Choisir le niveau de criticité pour chaque donnée :
+| Niveau | Copies | Offsite | Quand l'utiliser |
+|--------|--------|---------|------------------|
+| `critical` | 3 (NAS + Dropbox) | oui | Données irremplaçables (BDD métier, images médicales) |
+| `high` | 3 (NAS + Dropbox) | oui | Perte grave (BDD applicatives, configs critiques) |
+| `medium` | 2 (NAS) | non | Reconstructible mais coûteux (SQLite, fichiers générés) |
+| `low` | 1 (NAS hebdo) | non | Facilement reconstructible (cache, logs) |
+
+**Étape 4** — Rédiger `backup.json` avec une entry par donnée à sauvegarder.
+Chaque entry doit avoir une `description` explicite (utilisée dans le guide de restauration).
+
+✅ **Skill mono-cible avec données** :
+```json
+{
+  "strategy": "active",
+  "entries": [
+    {
+      "data_type": "config_files",
+      "paths": ["/opt/onyx/skills/ml-compute/config/"],
+      "criticality": "medium",
+      "description": "Configuration du skill (connexions, paramètres)"
+    },
+    {
+      "data_type": "sqlite",
+      "paths": ["/opt/onyx/skills/ml-compute/data/app.db"],
+      "criticality": "medium",
+      "description": "Base SQLite principale"
+    }
+  ]
+}
+```
+
+✅ **Skill sans données persistantes** :
+```json
+{
+  "strategy": "none",
+  "reason": "Service stateless, pas de données persistantes"
+}
+```
+
+✅ **Skill multi-cible** — ajouter `target_host` à chaque entry pour lier
+la sauvegarde à sa machine. Au déploiement, Forge ne registre que les entries
+qui correspondent à la cible en cours. Les descriptions doivent identifier la machine :
+```json
+{
+  "strategy": "active",
+  "entries": [
+    {
+      "data_type": "qdrant",
+      "target_host": "10.0.0.44",
+      "criticality": "high",
+      "description": "Collections Qdrant OnyxSoma — 12 collections RAG"
+    },
+    {
+      "data_type": "qdrant",
+      "target_host": "10.0.0.59",
+      "criticality": "high",
+      "description": "Collections Qdrant OnyxSynapse — bones recognition"
+    }
+  ]
+}
+```
+- Entries **avec** `target_host` → enregistrées uniquement lors du deploy sur cette cible
+- Entries **sans** `target_host` → enregistrées pour toutes les cibles (ex: config partagée)
+- **Pas de doublons** : le PUT scope par skill+target_host, chaque cible a ses propres entries
+
+**Au déploiement**, Forge automatiquement :
+1. Lit `backup.json` depuis la machine cible
+2. Filtre les entries pour cette cible (`target_host` match ou absent)
+3. Génère un guide de restauration markdown (procédures par support)
+4. Enregistre via `PUT /api/register-backup/{skill}` sur onyx-recovery
+5. Le guide est accessible dans le dashboard recovery et via API
+
+---
+
+## Architecture Modulaire OBLIGATOIRE
+
+### Structure Standard
+```
+ml-compute/
+├── manifest.json           # Config (core/heart/forge)
+├── requirements.txt        # Dépendances Python
+├── CLAUDE.md               # CE FICHIER (NE PAS MODIFIER)
+├── ARCHITECTURE.md         # Structure et composants
+├── API.md                  # Documentation endpoints
+├── TODO.md                 # Tâches en cours
+├── backup.json             # Stratégie de sauvegarde
+├── .gitignore              # Sécurité
+│
+├── src/                    # CODE SOURCE
+│   ├── __init__.py
+│   ├── main.py             # Point d'entrée FastAPI
+│   ├── models.py           # Modèles Pydantic
+│   │
+│   └── modules/            # MODULES FONCTIONNELS
+│       ├── __init__.py
+│       ├── {module_a}/     # Un module par fonctionnalité
+│       │   ├── __init__.py
+│       │   ├── service.py  # Logique métier
+│       │   ├── routes.py   # Routes FastAPI (optionnel)
+│       │   └── tests/      # Tests du module
+│       │       └── test_{module_a}.py
+│       │
+│       └── {module_b}/
+│           └── ...
+│
+├── biblio/                 # Bibliographie scientifique (optionnel)
+│   ├── INDEX.md            # Index des articles
+│   └── fiches/             # Fiches de lecture par article
+│
+└── tests/                  # Tests d'intégration
+    └── test_integration.py
+```
+
+### Règles Modules
+1. **Un module = une responsabilité**
+2. **Chaque module a ses propres tests** dans `modules/{nom}/tests/`
+3. **Interface claire**: fonctions publiques documentées avec types
+4. **Pas de dépendances circulaires** entre modules
+
+### Exemple Module
+```python
+# src/modules/processor/service.py
+"""Module de traitement des données."""
+
+from pydantic import BaseModel
+
+class ProcessRequest(BaseModel):
+    data: str
+    options: dict = {}
+
+class ProcessResult(BaseModel):
+    success: bool
+    output: str
+    duration_ms: float
+
+async def process(request: ProcessRequest) -> ProcessResult:
+    """
+    Traite les données selon les options.
+
+    Args:
+        request: Données à traiter avec options
+
+    Returns:
+        ProcessResult avec le résultat du traitement
+    """
+    # Implémentation KISS
+    ...
+```
+
+---
+
+## Principe KISS (Keep It Simple, Stupid)
+
+### À FAIRE
+- Code simple et lisible
+- Fonctions courtes (<50 lignes)
+- Noms explicites
+- Un fichier = une responsabilité
+- Tests pour chaque module
+
+### À ÉVITER
+- Classes avec une seule méthode → utiliser une fonction
+- Abstractions pour un seul cas → code direct
+- Factory/Builder pour 2-3 objets simples
+- Fichiers >300 lignes sans raison
+- Configuration excessive
+
+### Règle d'Or
+> "200 lignes de code clair > 10 fichiers de 20 lignes"
+
+---
+
+## Réutilisation des Skills Existants
+
+### AVANT de coder une fonctionnalité
+1. **Consulter les skills existants** via API ou fichiers
+2. **Lire leurs API.md** pour connaître les endpoints disponibles
+3. **Utiliser leurs endpoints** plutôt que recoder
+
+### Comment trouver les skills
+```bash
+# Liste des skills déployés
+curl http://10.0.0.44:8050/skills | jq '.skills[].name'
+
+# API d'un skill spécifique
+cat /home/onyx/projects/skills/{skill}/API.md
+
+# Ou via Core
+curl http://10.0.0.44:8050/skills/{name}/endpoints
+```
+
+### Exemple: Utiliser email-notification
+```python
+import httpx
+
+async def send_notification(subject: str, body: str):
+    async with httpx.AsyncClient() as client:
+        response = await client.post(
+            "http://10.0.0.44:8054/api/send",
+            json={"subject": subject, "body": body},
+            timeout=30.0
+        )
+        return response.json()
+```
+
+---
+
+### Autres Phases Critiques
+
+| Phase | À Checker | ✅ Correct | ❌ Erreur |
+|-------|-----------|-----------|----------|
+| **5. Run mode** | service, gui, oneshot | manifest.json valide | Mode invalide |
+| **6. Signaux Redis** | Events/status dans manifest | Champs optionnels | Référence invalide |
+| **8. Deploy target** | Host(s) dans inventory | IP ou nom (OnyxSoma, etc.) | Host n'existe pas |
+| **9. Dépendances** | Imports valides | `from src.config import ...` | Import relatif |
+| **10. Dashboard** | Config optionnelle | Présent ou absent | Format invalide |
+| **11. SDK Redis** | OnyxClient importé | `from onyx_sdk import ...` | Manquant (warning) |
+| **12. Format manifest** | JSON valide | Indentation 2 espaces | JSON malformé |
+| **13. Cron tasks** | Endpoints /cron | Valides si présents | Invalides |
+| **14. Markdown docs** | ARCHITECTURE.md structuré | Headings, listes | Format invalide |
+| **19. Health cron** | daily-health-check dans cron.json | Présent et activé | Manquant (service) |
+| **20. Backup** | backup.json avec strategy | active/none valide | Manquant (service) |
+
+---
+
+## Tâches Cron (Configuration Optionnelle)
+
+Si votre skill doit effectuer des opérations automatisées (monitoring, cleanup, rapports), définissez-les dans `cron.json`.
+
+### Configuration via cron.json
+
+**Fichier**: `cron.json` (optionnel - ignoré si absent)
+
+**Trois types de commandes**:
+
+1. **HTTP Endpoint** - Appelle un endpoint de votre skill
+   ```json
+   {
+     "type": "endpoint",
+     "endpoint": "/health",
+     "method": "GET"
+   }
+   ```
+
+2. **Script Python** - Exécute un script dans votre répertoire skill
+   ```json
+   {
+     "type": "script",
+     "script": "scripts/backup.py"
+   }
+   ```
+
+3. **Commande Shell** - Exécute une commande bash
+   ```json
+   {
+     "type": "command",
+     "command": "curl http://metrics/report"
+   }
+   ```
+
+### Exemple complet
+
+```json
+{
+  "tasks": [
+    {
+      "id": "health-check",
+      "name": "Hourly Health Check",
+      "description": "Verify skill health",
+      "schedule": "0 * * * *",
+      "command": {
+        "type": "endpoint",
+        "endpoint": "/health",
+        "method": "GET"
+      },
+      "timeout_seconds": 60,
+      "enabled": true,
+      "notify_on_failure": true
+    }
+  ]
+}
+```
+
+### Validation & Déploiement
+
+- **Phase 13 (Validation)**: Valide syntaxe et structure de `cron.json`
+- **Optionnel**: Pas d'erreur si manquant; validator suggère au développeur
+- **Déploiement**: Installe les tâches cron sur la machine cible
+- **Cleanup**: Supprime les anciennes tâches avant d'installer les nouvelles
+
+Voir `cron.json.example` pour un template complet avec tous les champs.
+
+---
+
+## Fichiers de Documentation
+
+| Fichier | Contenu | Màj quand | Vérifié par |
+|---------|---------|-----------|------------|
+| **TODO.md** | Tâches, bugs, idées | Début/fin de tâche | Phase 2 (freshness) |
+| **ARCHITECTURE.md** | Structure, modules, décisions | Ajout/modif module | Phase 2 (freshness) |
+| **API.md** | Endpoints avec exemples curl | Ajout/modif endpoint | Phase 14 (markdown) |
+| **DIAGRAM.md** | Diagramme Mermaid architecture | Ajout/modif module | Phase 1b (freshness) |
+| **backup.json** | Stratégie sauvegarde | Changement données/volumes | Phase 20 (backup) |
+| **CLAUDE.md** | CE FICHIER | JAMAIS (auto-généré) | Phase 1 (structure) |
+
+---
+
+## Configuration Skill
+
+| Champ | Valeur |
+|-------|--------|
+| **Nom** | ml-compute |
+| **Type** | docker |
+| **Port** | 9469 |
+| **Brain Area** | cortex-visuel |
+| **Target** | OnyxSoma |
+
+---
+
+## Développement Python Optimisé
+
+### Environnement
+```bash
+# TOUJOURS utiliser le venv global (NE PAS créer de .venv local)
+source /opt/onyx/venv/bin/activate
+
+# Vérifier l'activation
+which python  # Doit afficher /opt/onyx/venv/bin/python
+```
+
+### Linting avec Ruff (OBLIGATOIRE avant commit)
+```bash
+# Vérifier le code
+ruff check src/
+
+# Corriger automatiquement
+ruff check src/ --fix
+
+# Formatter le code
+ruff format src/
+```
+
+### Règles Ruff appliquées
+- **E**: Erreurs pycodestyle
+- **F**: Erreurs pyflakes (variables inutilisées, imports)
+- **W**: Warnings pycodestyle
+- **I**: Tri des imports (isort)
+- **UP**: Modernisation Python 3.12+
+- **B**: Bugs courants (flake8-bugbear)
+- **D**: Docstrings obligatoires (Google convention)
+
+### Docstrings OBLIGATOIRES (convention Google)
+
+Chaque fonction, classe et méthode publique DOIT avoir un docstring.
+Couverture minimum: 30% (erreur bloquante), objectif: 60%+.
+
+```python
+def deploy_skill(name: str, target: str, version: str = "patch") -> DeployResult:
+    """Deploy a skill to the target host.
+
+    Args:
+        name: Skill name (kebab-case).
+        target: Target host IP or hostname.
+        version: Version bump type (patch/minor/major).
+
+    Returns:
+        DeployResult with status and deployment details.
+
+    Raises:
+        DeploymentError: If the target is unreachable.
+    """
+```
+
+Règles:
+- Première ligne: description courte, impérative, terminée par un point.
+- Args/Returns/Raises: seulement si pertinent (pas pour les getters simples).
+- Fonctions privées (`_xxx`): docstring recommandé mais non obligatoire.
+
+### Bonnes pratiques Python (Validées par Phases 16-18)
+
+#### ✅ Types Explicites (Phase 16: mypy)
+```python
+# CORRECT - Tous les paramètres et retours typés
+async def process(data: str, timeout: float = 30.0) -> dict:
+    """Traite les données avec timeout."""
+    return {"success": True}
+
+# INCORRECT ❌ - mypy va échouer
+async def process(data, timeout=30):
+    return {"success": True}
+```
+
+#### ✅ Imports Absolus (Phase 7: Git)
+```python
+# CORRECT - Imports absolus
+from src.config import CONFIG
+from src.modules.skills import get_skills
+
+# INCORRECT ❌ - Imports relatifs
+from config import CONFIG
+from .modules.skills import get_skills
+```
+
+#### ✅ HTTP Async avec httpx
+```python
+# CORRECT - httpx async (recommandé)
+import httpx
+
+async with httpx.AsyncClient() as client:
+    response = await client.get(url, timeout=30.0)
+    data = response.json()
+
+# INCORRECT ❌ - requests (bloquant, pas async)
+import requests
+response = requests.get(url)
+
+# INCORRECT ❌ - aiohttp (moins standard)
+import aiohttp
+async with aiohttp.ClientSession() as session:
+    response = await session.get(url)
+```
+
+#### ✅ Pydantic Models
+```python
+# CORRECT - Validation avec Pydantic
+from pydantic import BaseModel, Field
+
+class Request(BaseModel):
+    data: str
+    options: dict = Field(default_factory=dict)
+    timeout: float = 30.0
+
+# INCORRECT ❌ - dataclasses (pas de validation)
+from dataclasses import dataclass
+
+@dataclass
+class Request:
+    data: str
+    options: dict = None
+```
+
+#### ✅ Docstrings Google Convention (Phase 18)
+```python
+# CORRECT - Google style
+def deploy(skill_name: str, target: str = "10.0.0.13") -> bool:
+    """Déploie un skill sur un host cible.
+    
+    Coordonne git push, SSH, systemd restart.
+    
+    Args:
+        skill_name: Nom du skill (kebab-case)
+        target: Host cible (défaut: 10.0.0.13)
+        
+    Returns:
+        True si succès, False sinon
+        
+    Raises:
+        DeploymentError: Si host inaccessible
+    """
+    pass
+
+# INCORRECT ❌ - Pas de docstring ou mal formattée
+def deploy(skill_name, target="10.0.0.13"):
+    # Implémentation sans docstring
+    pass
+```
+
+#### ✅ Pas de Credentials en Dur (Phase 7: Security)
+```python
+# CORRECT - Vault
+async def get_api_key() -> str:
+    async with httpx.AsyncClient() as client:
+        r = await client.get("http://10.0.0.44:8050/vault/api_key")
+        return r.json()["value"]
+
+# INCORRECT ❌ - Hardcoded
+API_KEY = "sk-1234567890abcdef"
+SECRET = "my-secret-password"
+```
+
+---
+
+## Tests
+
+### Structure Tests
+```
+tests/
+├── test_integration.py     # Tests bout-en-bout
+└── conftest.py             # Fixtures pytest
+
+src/modules/{module}/tests/
+└── test_{module}.py        # Tests unitaires du module
+```
+
+### Lancement
+```bash
+# Tous les tests (mode rapide)
+pytest tests/ -x -q
+
+# Un module spécifique
+pytest src/modules/processor/tests/
+
+# Avec couverture
+pytest --cov=src --cov-report=term-missing
+
+# Tests parallèles (si pytest-xdist installé)
+pytest -n auto
+```
+
+---
+
+## Garde-fous Résilience et Mémoire
+
+### Démarrage résilient (RECOMMANDÉ)
+Les dépendances externes (Redis, Vault) peuvent ne pas être prêtes au boot de la machine.
+Utiliser `wait_for_dependency()` avec backoff exponentiel dans le lifespan AVANT `onyx.start()`.
+
+```python
+async def wait_for_dependency(name: str, check, *, retries: int = 5, base_delay: float = 1.0, max_delay: float = 30.0) -> bool:
+    for attempt in range(retries):
+        try:
+            if await check():
+                return True
+        except Exception:
+            pass
+        await asyncio.sleep(min(base_delay * (2 ** attempt), max_delay))
+    return False
+```
+
+En cas d'échec : log ERROR clair, laisser systemd réessayer (RestartSteps avec backoff).
+NE PAS boucler indéfiniment en interne (masque l'état du service).
+
+### Logging structuré (OBLIGATOIRE)
+```python
+import logging
+logger = logging.getLogger("mon-skill")
+# PAS de print() pour les messages de démarrage/erreur
+```
+
+### Endpoint /ready (RECOMMANDÉ)
+```python
+@app.get("/ready")
+async def ready():
+    if not deps_ready:
+        return {"status": "not_ready"}
+    return {"status": "ready"}
+```
+
+### Limites mémoire (manifest)
+Forge applique automatiquement des limites systemd. Pour les skills gourmands :
+```json
+"heart": {
+  "resources": {
+    "memory_high": "4G",
+    "memory_max": "6G"
+  }
+}
+```
+Défauts : MemoryHigh=1536M, MemoryMax=2G.
+
+---
+
+## Sécurité
+
+### Credentials via Vault (OBLIGATOIRE)
+```python
+import httpx
+
+async def get_secret(key: str) -> str:
+    async with httpx.AsyncClient() as client:
+        r = await client.get(f"http://10.0.0.44:8050/vault/{key}")
+        return r.json()["value"]
+
+# Usage
+api_key = await get_secret("mon_api_key")
+```
+
+### Jamais en dur
+```python
+# INTERDIT
+API_KEY = "sk-xxx..."
+
+# CORRECT
+API_KEY = await get_secret("api_key")
+```
+
+---
+
+## Workflow Session
+
+### Au démarrage
+1. Lire `/opt/onyx/forge/CLAUDE.md` (règles Forge globales)
+2. Lire ce fichier (CLAUDE.md du skill) → **Sections "VALIDATION" critiques!**
+3. Lire `TODO.md` (tâches en cours)
+4. Lire `ARCHITECTURE.md` (structure actuelle)
+5. Lire `API.md` (endpoints existants)
+6. Lire `manifest.json` (configuration)
+
+### Développement
+1. Identifier la tâche dans TODO.md
+2. Créer/modifier le module approprié (< 300 lignes)
+3. Ajouter types explicites à toutes les fonctions
+4. Écrire docstrings (Google convention)
+5. Écrire les tests du module
+6. Mettre à jour ARCHITECTURE.md et API.md
+7. Ruff check/fix avant commit
+
+### ⚠️ AVANT CHAQUE COMMIT
+```bash
+# 1. Linting (OBLIGATOIRE)
+ruff check src/ --fix
+ruff format src/
+
+# 2. Type checking
+mypy src/ --strict
+
+# 3. Tests
+pytest tests/ -x -q
+
+# 4. VALIDATION (18 phases)
+curl -X POST http://10.0.0.13:4080/api/validate/ml-compute | jq .
+
+# Si validation échoue: affiche les erreurs structurées
+# Lisez bien les "correction.action" et "correction.notes"
+```
+
+---
+
+## Checklist Pré-Commit (Copiez-collez)
+
+```
+📋 AVANT de committer:
+
+Infrastructure:
+☐ CLAUDE.md présent (ne pas modifier)
+☐ API.md documenterait (endpoints + exemples)
+☐ ARCHITECTURE.md à jour
+☐ DIAGRAM.md à jour (diagramme architecture Mermaid)
+☐ TODO.md reflète l'état du code
+☐ .gitignore contient: *.pyc, __pycache__, .env, *.key
+☐ backup.json présent (strategy: active ou none)
+☐ cron.json présent si run_mode=service (avec daily-health-check)
+
+Code:
+☐ Tous les paramètres ont un type (Phase 16: mypy)
+☐ Tous les retours ont un type
+☐ Tous les publics ont un docstring (Phase 18)
+☐ Docstrings en Google convention
+☐ Pas de credentials en dur (Phase 7: Security)
+☐ Imports absolus (from src.xxx import)
+☐ Chaque module < 300 lignes (Phase 15)
+☐ httpx async pour HTTP (pas requests)
+☐ Pydantic pour validations
+
+Tests:
+☐ pytest passe sans erreur
+☐ Tous les modules ont des tests
+
+Validation:
+☐ ruff check src/ --fix passe
+☐ mypy src/ passe (zéro erreur)
+☐ curl -X POST http://10.0.0.13:4080/api/validate/ml-compute = valid: true
+
+Git:
+☐ git status propre (commits fait)
+☐ Branch est dev (pas main)
+☐ Commit messages clairs
+```
+
+---
+
+## Dashboard & Portail UI
+
+Au déploiement, Forge enregistre automatiquement les pages UI du skill dans le portail Onyx
+(POST /portal/api/register sur Core). La configuration se fait dans `manifest.json > dashboard`.
+
+### Configuration dashboard dans le manifest
+
+```json
+{
+  "dashboard": {
+    "enabled": true,
+    "page": "/",
+    "icon": "hammer",
+    "color": "#00d4aa",
+    "category": "infrastructure",
+    "config_page": "/api/config",
+    "status_page": "/api/logs"
+  }
+}
+```
+
+| Champ | Description | Exemple |
+|-------|-------------|---------|
+| `enabled` | Active l'enregistrement dans le portail | `true` |
+| `page` | Chemin de la page principale du skill | `/`, `/dashboard`, `index.html` |
+| `icon` | Icône (emoji ou nom) | `hammer`, `shield`, `📝` |
+| `color` | Couleur dans le portail | `#00d4aa` |
+| `category` | Catégorie de regroupement | `infrastructure`, `medical`, `media`, `skill` |
+| `config_page` | Page de configuration (optionnel) | `/api/config` |
+| `status_page` | Page de logs/status (optionnel) | `/api/logs` |
+
+### Endpoint GET /pages (RECOMMANDÉ pour skills multi-pages)
+
+Si le skill expose plusieurs pages HTML, il **DOIT** implémenter un endpoint `GET /pages`
+qui retourne la liste de ses pages UI. Forge l'appelle au déploiement pour enregistrer
+toutes les pages dans le portail.
+
+```python
+@app.get("/pages")
+async def get_pages() -> list[dict]:
+    """Déclare les pages UI du skill pour le portail Onyx."""
+    return [
+        {"id": "main", "label": "Dashboard", "path": "/", "icon": "🏠", "order": 0},
+        {"id": "generator", "label": "Générateur", "path": "/generator", "icon": "⚡", "order": 1},
+        {"id": "editor", "label": "Éditeur", "path": "/editor", "icon": "✏️", "order": 2},
+        {"id": "config", "label": "Configuration", "path": "/config", "icon": "⚙️", "order": 3},
+    ]
+```
+
+**Champs par page** :
+| Champ | Requis | Description |
+|-------|--------|-------------|
+| `path` | oui | Chemin URL de la page (ex: `/`, `/generator`) |
+| `label` | oui | Nom affiché dans le portail |
+| `id` | non | Identifiant unique (déduit du path si absent) |
+| `icon` | non | Emoji ou nom d'icône |
+| `order` | non | Ordre d'affichage (0 = premier) |
+
+**Priorité de détection au déploiement** :
+1. `GET /pages` sur le skill en cours d'exécution (le plus fiable)
+2. `manifest.json > dashboard.pages` (fallback déclaratif)
+3. `manifest.json > dashboard.page` (single page fallback)
+
+### Fallback manifest (skills simples avec 1 seule page)
+
+Pour les skills avec une seule page, `dashboard.page` suffit :
+```json
+{
+  "dashboard": {
+    "enabled": true,
+    "page": "/",
+    "icon": "hammer",
+    "color": "#00d4aa",
+    "category": "infrastructure"
+  }
+}
+```
+
+Pour les skills avec plusieurs pages déclarées statiquement (sans endpoint /pages) :
+```json
+{
+  "dashboard": {
+    "enabled": true,
+    "pages": [
+      {"id": "main", "label": "Dashboard", "path": "/", "icon": "home", "order": 0},
+      {"id": "config", "label": "Configuration", "path": "/config", "icon": "settings", "order": 1}
+    ],
+    "icon": "hammer",
+    "color": "#00d4aa",
+    "category": "infrastructure"
+  }
+}
+```
+
+### Catégories disponibles
+
+| Catégorie | Usage |
+|-----------|-------|
+| `infrastructure` | Services système (Forge, Core, Recovery, Router) |
+| `medical` | Skills médicaux (CR Engine, DICOM, Fluoro) |
+| `media` | Contenus et médias (Article Writer, Video Studio) |
+| `content` | Gestion de contenu (Verso, WordPress) |
+| `skill` | Skills applicatifs génériques |
+
+---
+
+## Bibliographie scientifique (biblio/)
+
+Chaque skill dispose d'une bibliographie alimentée depuis Zotero (collection `forge/ml-compute`)
+et enrichie par paper-reader (lecture approfondie avec extraction tableaux, formules, algorithmes).
+
+Les données sont stockées en **double** :
+- **`biblio/fiches/*.md`** — fiches markdown lisibles directement (git)
+- **Qdrant collection `forge_biblio_ml-compute`** — recherche sémantique vectorielle (OnyxSoma)
+
+### Structure
+
+```
+biblio/
+    INDEX.md              # Table des articles (titre, auteurs, année)
+    fiches/
+        ABC123.md         # Fiche complète (méthodologie, algorithmes, tableaux, formules)
+        DEF456.md
+```
+
+### Collection Qdrant dédiée
+
+Chaque skill a sa propre collection Qdrant : `forge_biblio_ml-compute` (ex: `forge_biblio_cr_engine`).
+Les articles sont découpés en sections vectorisées séparément :
+
+| Section | Contenu | Usage |
+|---------|---------|-------|
+| `abstract` | Résumé de l'article | Pertinence rapide |
+| `methodology` | Méthodes, protocoles, matériel | Comment c'est fait |
+| `results` | Résultats, statistiques | Ce qui a été trouvé |
+| `algorithm` | Pseudo-code, formules, algorithmes | Implémentation |
+| `table` | Tableaux extraits (markdown) | Données structurées |
+| `formula` | Formules LaTeX | Calculs, équations |
+| `synthesis` | Synthèse globale | Vue d'ensemble |
+
+### Commandes (utiliser `/forge-biblio`)
+
+```bash
+/forge-biblio sync                     # Sync nouveaux articles depuis Zotero → lecture → vectorisation
+/forge-biblio search "bone algorithm"  # Recherche sémantique dans la collection Qdrant dédiée
+/forge-biblio fiches                   # Liste les fiches disponibles
+/forge-biblio status                   # Statut (articles, fiches, vecteurs Qdrant)
+```
+
+### RÈGLE OBLIGATOIRE
+
+**AVANT d'implémenter un algorithme, une méthode de calcul ou une technique issue de la littérature** :
+1. Chercher dans la biblio : `/forge-biblio search "description de ce que tu cherches"`
+2. Si un résultat pertinent existe, lire la fiche complète dans `biblio/fiches/{clé}.md`
+3. S'appuyer sur les algorithmes, formules et tableaux extraits pour l'implémentation
+4. Citer la source dans le code (commentaire avec DOI ou titre de l'article)
+
+### Au démarrage de session
+
+1. Vérifier si `biblio/INDEX.md` existe → le lire pour connaître les articles disponibles
+2. La synchronisation Zotero se lance automatiquement en arrière-plan (nouveaux articles seulement)
+3. Utiliser `/forge-biblio search` tout au long du développement
+
+---
+
+## Références
+
+| Doc | Usage |
+|-----|-------|
+| `/opt/onyx/forge/CLAUDE.md` | Règles Forge complètes |
+| `http://10.0.0.44:8050/skills` | Skills déployés |
+| `http://10.0.0.44:8050/vault/{key}` | Secrets |
+| `http://10.0.0.44:8083/api/backup-targets` | Types de backup et criticités |
+| `http://10.0.0.44:8083/api/backup-registry` | Backups enregistrés |
+| `http://10.0.0.44:8083/api/restore-doc/{skill}` | Guide de restauration |

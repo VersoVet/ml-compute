@@ -4,11 +4,7 @@ Tests verify job template payload structure and environment variable handling.
 """
 
 import json
-import sys
 from pathlib import Path
-from unittest.mock import MagicMock
-
-import pytest
 
 
 class TestJobTemplatePayloads:
@@ -123,6 +119,18 @@ class TestJobTemplateFiles:
         """Test that bone-annotator training template exists."""
         template_path = Path("/home/onyx/projects/skills/ml-compute") / "jobs" / "bone-annotator" / "train_yolo.py"
         assert template_path.exists(), f"Template not found: {template_path}"
+
+    def test_bone_ml_boneseg_template_exists(self):
+        """The bone-ml BoneSeg Ray entrypoint is shipped by ml-compute."""
+        template_path = Path(__file__).parents[1] / "jobs" / "bone-ml" / "train_boneseg.py"
+        assert template_path.is_file()
+
+    def test_bone_train_boneseg_template_exists(self):
+        """The bone-train SwinUNETR Ray entrypoint is shipped by ml-compute."""
+        template_path = Path(__file__).parents[1] / "jobs" / "bone-train" / "train_boneseg.py"
+        content = template_path.read_text()
+        assert "find_bone_train_root" in content
+        assert 'jobs" / "train_boneseg.py' in content
 
     def test_bone_recognition_readme_exists(self):
         """Test that bone-recognition README exists."""

@@ -458,6 +458,26 @@ TIERS, PG_HOST/PORT/DB/USER/PASSWORD, LEARNING_RATE, WEIGHT_DECAY, ML_MODELS_DIR
 
 **Sortie** : `{ML_MODELS_DIR}/{RUN_NAME}_best.pt` + update PG `boneseg_training_runs`
 
+### bone-train BoneSeg (`jobs/bone-train/train_boneseg.py`)
+
+Soumis par bone-train (`POST /api/boneseg/train`). Contrat Ray :
+
+```json
+{
+  "entrypoint": "python jobs/bone-train/train_boneseg.py",
+  "runtime_env": {
+    "working_dir": "/opt/onyx/skills/ml-compute",
+    "py_modules": ["/opt/onyx/skills/bone-train"]
+  },
+  "submit_kwargs": {"num_gpus": 1}
+}
+```
+
+Le wrapper execute l'implementation canonique SwinUNETR de bone-train sur le driver GPU Ray.
+
+**Env vars** : BONE_TYPE, EPOCHS, BATCH_SIZE, BASE_MODEL, RUN_NAME, TIERS,
+PG_HOST/PORT/DB/USER/PASSWORD, LEARNING_RATE, WEIGHT_DECAY, ML_MODELS_DIR
+
 ---
 
 ## SAM / MedSAM (HORS SCOPE runtime)
@@ -492,7 +512,82 @@ curl http://10.0.0.26:9470/health
 
 ---
 
+## GPU Management API
+
+Gestion de l'allocation GPU sur OnyxCortex. Permet de liberer la VRAM occupee par SAM/MedSAM2 (~6 Go) avant un training, puis de les relancer apres.
+
+### GET /api/gpu/status
+Etat actuel du GPU et des containers d'inference.
+
+```bash
+curl http://10.0.0.44:9469/api/gpu/status
+```
+
+**Response**:
+```json
+{
+  "gpu_name": "NVIDIA GeForce RTX 4070 SUPER",
+  "gpu_memory_used_mib": 6035,
+  "gpu_memory_total_mib": 12282,
+  "gpu_memory_free_mib": 6247,
+  "mode": "inference",
+  "containers": [
+    {"name": "sam-gpu", "running": true, "gpu_mib": 0},
+    {"name": "medsam2-gpu", "running": true, "gpu_mib": 0}
+  ],
+  "acquired_at": null
+}
+```
+
+### POST /api/gpu/acquire
+Arrete SAM et MedSAM2 pour liberer le GPU pour le training.
+
+```bash
+curl -X POST http://10.0.0.44:9469/api/gpu/acquire
+```
+
+**Response**:
+```json
+{
+  "success": true,
+  "mode": "training",
+  "stopped_containers": ["sam-gpu", "medsam2-gpu"],
+  "gpu_memory_free_mib": 11874,
+  "message": "GPU acquired for training. Stopped 2 container(s). Free VRAM: 11874 MiB"
+}
+```
+
+### POST /api/gpu/release
+Relance SAM et MedSAM2 apres un training.
+
+```bash
+curl -X POST http://10.0.0.44:9469/api/gpu/release
+```
+
+**Response**:
+```json
+{
+  "success": true,
+  "mode": "inference",
+  "started_containers": ["sam-gpu", "medsam2-gpu"],
+  "message": "GPU released to inference. Started 2 container(s)."
+}
+```
+
+---
+
 ## Updates
+
+### [v0.3.0] 2026-10-27
+- Module GPU management : acquire/release GPU sur OnyxCortex (stop/start SAM+MedSAM2)
+- Endpoints /api/gpu/status, /api/gpu/acquire, /api/gpu/release
+- Suppression modules legacy sam/ et serve_proxy/
+- Restart cluster Ray (nouvelle session), NFS montes dans ray-head
+- Retrait Glia du cluster (machine hors service)
+- Install torch/torchvision/timm/blosc2 dans ray-worker
+
+### [v0.2.7] 2026-10-04
+- OnyxCortex ajouté dans la config workers
 
 ### [v0.2.4] 2026-08-30
 - Job template `jobs/bone-ml/train_boneseg.py` pour entrainement BoneSegNet (bone-ml)

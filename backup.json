@@ -3,21 +3,28 @@
   "entries": [
     {
       "data_type": "generated_files",
-      "paths": ["/opt/onyx/skills/ml-compute/models/"],
-      "criticality": "high",
-      "description": "Modèles ML entraînés (YOLO, EfficientNet, LLM). Durée d'entraînement = jours. Stockage: ~10-50GB par modèle."
+      "paths": [
+        "/opt/onyx/skills/ml-compute/models/"
+      ],
+      "description": "Modèles ML entraînés (YOLO, EfficientNet, LLM). Durée d'entraînement = jours. Stockage: ~10-50GB par modèle.",
+      "level": 2
     },
     {
       "data_type": "config_files",
-      "paths": ["/opt/onyx/skills/ml-compute/config/"],
-      "criticality": "medium",
-      "description": "Configuration Ray cluster (ray-config.json), endpoints workers, paramètres d'inférence"
+      "paths": [
+        "/opt/onyx/skills/ml-compute/config/"
+      ],
+      "description": "Configuration Ray cluster (ray-config.json), endpoints workers, paramètres d'inférence",
+      "level": 3
     },
     {
       "data_type": "generated_files",
-      "paths": ["/opt/onyx/skills/ml-compute/jobs/checkpoints/"],
-      "criticality": "medium",
-      "description": "Checkpoints intermédiaires lors du training (pour reprendre si crash). Volumineux mais reconstructibles à partir des modèles finaux."
+      "paths": [
+        "/opt/onyx/skills/ml-compute/jobs/checkpoints/"
+      ],
+      "description": "Checkpoints intermédiaires lors du training (pour reprendre si crash). Volumineux mais reconstructibles à partir des modèles finaux.",
+      "level": 3
     }
-  ]
+  ],
+  "version": 2
 }

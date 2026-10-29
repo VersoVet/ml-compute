@@ -1,60 +1,23 @@
 services:
   # Ray Head Node (Orchestration only, --num-cpus=0)
+  # API is managed by systemd (onyx-ml-compute.service), not Docker
   ray-head:
     image: rayproject/ray:2.35.0-py312
     container_name: ray-head
     restart: unless-stopped
     network_mode: host
+    shm_size: 4g
     environment:
       RAY_memory: 4000000000
       RAY_object_store_memory: 1000000000
     command: bash -c "ray start --head --num-cpus=0 --port=6380 --dashboard-host=0.0.0.0 --dashboard-port=8265 --ray-debugger-external && sleep infinity"
-    ports:
-      - "6379:6379"
-      - "8265:8265"
     volumes:
       - /tmp/ray:/tmp/ray
+      - /mnt/bonestore:/mnt/bonestore:ro
+      - /mnt/ml-store:/mnt/ml-store:rw
     healthcheck:
       test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/8265 && echo 'OK' || exit 1"]
       interval: 10s
       timeout: 5s
       retries: 60
       start_period: 120s
-
-  # FastAPI Wrapper (OnyxClient integration)
-  api:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    container_name: ml-compute-api
-    restart: unless-stopped
-    network_mode: host
-    environment:
-      RAY_DASHBOARD_URL: http://localhost:8265
-      UVICORN_HOST: 0.0.0.0
-      UVICORN_PORT: 9469
-      LOG_LEVEL: info
-    depends_on:
-      ray-head:
-        condition: service_healthy
-    ports:
-      - "9469:9469"
-    volumes:
-      - ./models:/opt/onyx/skills/ml-compute/models
-      - ./config:/opt/onyx/skills/ml-compute/config
-      - ./onyx_sdk.whl:/app/onyx_sdk.whl:ro
-    entrypoint: /app/entrypoint.sh
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:9469/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-
-volumes:
-  ray-storage:
-    driver: local
-
-networks:
-  default:
-    name: ml-compute
-    driver: bridge

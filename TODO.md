@@ -79,14 +79,36 @@ Endpoints /api/backends et /api/compute/*. Auto-selection local > lightning > ka
 ### BoneSeg training job
 
 - [x] Script `jobs/bone-ml/train_boneseg.py` (BoneSegNet, tier-weighted loss, PG update)
+- [x] Script `jobs/bone-train/train_boneseg.py` (wrapper Ray vers SwinUNETR canonique bone-train)
+- [x] Contrat Ray bone-train : working_dir ml-compute + source bone-train dans `py_modules`
 
-### Nettoyage legacy SAM
+### Nettoyage legacy SAM (2026-10-27 — PARTIEL)
 
-- [ ] Supprimer le module `src/modules/sam/` (code legacy, SAM dans bone-annotator)
-- [ ] Supprimer le module `src/modules/serve_proxy/` (proxy SAM legacy)
-- [ ] Retirer les routers SAM de `main.py`
+- [x] Supprimer le module `src/modules/sam/` (code legacy, SAM dans bone-annotator)
+- [x] Supprimer le module `src/modules/serve_proxy/` (proxy SAM legacy)
+- [x] Retirer les routers SAM de `main.py`
 - [ ] Supprimer `jobs/sam/` et `jobs/nuclio-sam-proxy/` (fichiers reference)
 - [ ] Retirer la section SAM de `config/ml-compute.yaml`
+
+### GPU Management (2026-10-27 — DONE)
+
+- [x] Module `src/modules/gpu/` : acquire/release GPU sur OnyxCortex
+- [x] Endpoints POST /api/gpu/acquire, POST /api/gpu/release, GET /api/gpu/status
+- [x] Docker TCP activé sur Cortex (10.0.0.26:2375, réseau interne)
+- [x] Arrêt/relance SAM+MedSAM2 containers pour libérer ~6 Go VRAM
+- [x] Auditer l'extension GPU OnyxPoint : x16 occupé par T1000, seul x1 low-profile libre ;
+      aucune carte pleine hauteur directement compatible (2026-10-29)
+
+### Cluster Ray (2026-10-27 — DONE)
+
+- [x] Restart ray-head (nouvelle session 2026-10-27)
+- [x] Reconnect ray-worker OnyxCortex
+- [x] Ajout volumes NFS au ray-head (/mnt/bonestore ro, /mnt/ml-store rw)
+- [x] shm_size=4g pour ray-head
+- [x] Install torch/torchvision/timm/blosc2 dans ray-worker
+- [x] Retrait Glia de la config (machine hors service)
+- [x] Nettoyage docker-compose (retrait service api, systemd gère l'API)
+- [x] Test job Ray : SUCCEEDED
 
 ### Fix et ameliorations
 

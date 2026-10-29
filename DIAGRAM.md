@@ -15,7 +15,7 @@ graph LR
     end
 
     subgraph Backends["Compute Backends"]
-        Local["Local Ray Cluster<br/>RTX 4070 SUPER 12GB<br/>OnyxCortex + Glia"]
+        Local["Local Ray Cluster (actuel)<br/>RTX 4070 SUPER 12GB<br/>OnyxCortex"]
         Lightning["Lightning AI<br/>Tesla T4 16GB<br/>~22h GPU/mois"]
         Kaggle["Kaggle Notebooks<br/>Tesla T4 16GB<br/>30h GPU/semaine"]
     end
@@ -47,10 +47,13 @@ graph TB
         API --- NomadServer
     end
 
-    subgraph Workers["ML Workers"]
-        Cortex["OnyxCortex (10.0.0.26)<br/>RTX 4070 SUPER 12GB<br/>16 cores, 46GB RAM<br/>Ray + Nomad client"]
-        Glia["Glia (10.0.0.8)<br/>CPU only<br/>20 cores, 47GB RAM<br/>Ray client"]
-        OPoint["OnyxPoint (10.0.0.86)<br/>T1000 8GB<br/>10 cores, 23GB RAM<br/>Ray + Nomad client"]
+    subgraph Workers["ML Workers actuels"]
+        Cortex["OnyxCortex (10.0.0.26)<br/>RTX 4070 SUPER 12GB<br/>16 cores, 46GB RAM<br/>Ray + Nomad client (transitoire)"]
+    end
+
+    subgraph Dedicated["Machines hors cluster"]
+        OPoint["OnyxPoint (10.0.0.86)<br/>T1000 8GB<br/>GROBID dedie<br/>x16 occupe, aucun GPU pleine hauteur"]
+        Glia["Glia (10.0.0.8)<br/>Hors service"]
     end
 
     subgraph Storage["NFS Storage"]
@@ -59,15 +62,10 @@ graph TB
     end
 
     RayHead -->|ray worker| Cortex
-    RayHead -->|ray worker| Glia
-    RayHead -->|ray worker| OPoint
     NomadServer -->|GPU alloc| Cortex
-    NomadServer -->|GPU alloc| OPoint
 
     Cortex --- MLStore
     Cortex --- BoneStore
-    Glia --- MLStore
-    Glia --- BoneStore
 
     subgraph Clients["Skills Clients"]
         BoneML["bone-ml"]
@@ -79,6 +77,27 @@ graph TB
     BoneAnnotator -->|POST /api/jobs| API
     BoneRec -->|POST /api/jobs| API
     BoneML -->|POST /api/boneseg/train| API
+```
+
+## Rigs IA cibles
+
+```mermaid
+graph LR
+    API["ml-compute API<br/>GPU acquire / release"]
+
+    subgraph Rig1["Rig 1 - puissance partagee"]
+        VLLM["2 x RTX 3090 - 48 Go<br/>defaut : vLLM Qwen 72B<br/>training : DataParallel"]
+        Light["RTX 4070 SUPER - 12 Go<br/>training leger"]
+    end
+
+    subgraph Rig2["Rig 2 - inference always-on"]
+        Services["6 x RTX 2060 SUPER<br/>SAM / MedSAM2 / bge-m3<br/>OCR / inference ML / spares"]
+    end
+
+    API -->|acquire rig1 : stop vLLM| VLLM
+    API -->|release rig1 : restart vLLM| VLLM
+    API -->|jobs legers| Light
+    API -->|services dedies| Services
 ```
 
 ## BoneSeg Training Flow
@@ -136,7 +155,8 @@ graph LR
 ```
 
 **Point cle** : SAM et Ray Worker partagent le meme GPU sur OnyxCortex.
-Il faut stopper SAM avant de lancer un training job (coordination manuelle via bone-annotator).
+L'API `POST /api/gpu/acquire` stoppe SAM et MedSAM2 avant un training, puis
+`POST /api/gpu/release` les relance.
 
 **Protocole CVAT** : Nuclio appelle `POST http://10.0.0.26:9470/api/embed` qui doit
 retourner `{blob, shape}` (source : `jobs/sam/sam_server.py`, image `sam-inference`).
@@ -183,6 +203,7 @@ graph LR
         Serve["serve/<br/>Ray Serve mgmt"]
         Models["models/<br/>Model registry"]
         Nomad["nomad/<br/>GPU orchestration"]
+        GPU["gpu/<br/>acquire / release multi-cible"]
     end
 
     Main -->|/api/jobs| Jobs
@@ -190,6 +211,7 @@ graph LR
     Main -->|/api/serve| Serve
     Main -->|/api/models| Models
     Main -->|/api/nomad| Nomad
+    Main -->|/api/gpu| GPU
 
     RayDash["Ray Dashboard :8265"]
     NomadAPI["Nomad API :4646"]
@@ -198,6 +220,7 @@ graph LR
     Nodes -->|httpx| RayDash
     Serve -->|httpx| RayDash
     Nomad -->|httpx| NomadAPI
+    GPU -->|Docker API| CortexDocker["OnyxCortex :2375<br/>SAM + MedSAM2"]
 
     Config["config.py<br/>ml-compute.yaml"]
     Nomad --- Config

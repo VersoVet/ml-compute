@@ -1,0 +1,86 @@
+# Llumnix: Dynamic Scheduling for Large Language Model Serving
+
+
+
+## Synthese
+
+
+Cet article présente Llumnix, un système d'ordonnancement dynamique pour le service (serving) de grands modèles de langage (LLM), motivé par la diversité croissante des applications et des exigences de latence associées à des modèles de plus en plus task-agnostic et capables de traiter des séquences toujours plus longues. Les auteurs soulignent que la nature autorégressive de l'inférence LLM, décomposée en phases de prefill et de decode, ainsi que la nécessité de gérer dynamiquement le KV cache via des techniques comme PagedAttention, complexifient l'ordonnancement des requêtes et peuvent entraîner des files d'attente ou des préemptions lorsque la mémoire GPU devient insuffisante. Pour évaluer Llumnix, les auteurs ont conduit des expériences sur un cluster de 16 GPU NVIDIA A10, avec les modèles LLaMA-7B et LLaMA-30B, en utilisant des traces synthétiques de 10 000 requêtes construites à partir de jeux de données réels de conversations (ShareGPT, BurstGPT) et de distributions de longueurs en loi de puissance simulant des charges de travail à longue traîne. Llumnix a été comparé à trois approches de référence (dispatching round-robin, INFaaS++ et Llumnix-base) selon des métriques de latence end-to-end, de prefill et de decode, en moyenne et au 99e percentile.
+
+Cet article présente Llumnix, un système d'ordonnancement dynamique pour le service (serving) de grands modèles de langage (LLM), motivé par la diversité croissante des applications et des exigences de latence associées à des modèles de plus en plus task-agnostic et capables de traiter des séquences toujours plus longues. Les auteurs soulignent que la nature autorégressive de l'inférence LLM, décomposée en phases de prefill et de decode, ainsi que la nécessité de gérer dynamiquement le KV cache via des techniques comme PagedAttention, complexifient l'ordonnancement des requêtes et peuvent entraîner des files d'attente ou des préemptions lorsque la mémoire GPU devient insuffisante. Pour évaluer Llumnix, les auteurs ont conduit des expériences sur un cluster de 16 GPU NVIDIA A10, avec les modèles LLaMA-7B et LLaMA-30B, en utilisant des traces synthétiques de 10 000 requêtes construites à partir de jeux de données réels de conversations (ShareGPT, BurstGPT) et de distributions de longueurs en loi de puissance simulant des charges de travail à longue traîne. Llumnix a été comparé à trois approches de référence (dispatching round-robin, INFaaS++ et Llumnix-base) selon des métriques de latence end-to-end, de prefill et de decode, en moyenne et au 99e percentile. La conclusion de l'article présente Llumnix comme une réalisation concrète de la vision consistant à concevoir le serving des grands modèles de langage (LLM) selon les principes des systèmes d'exploitation de type Unix, motivée par les similitudes entre LLM et OS modernes en termes d'universalité, de multi-tenance et de dynamisme. Les auteurs transposent des abstractions classiques des systèmes d'exploitation — isolation, gestion des priorités et changement de contexte — au domaine du serving LLM, ce dernier étant implémenté via la migration de requêtes d'inférence et une reprogrammation dynamique et continue des requêtes. L'évaluation expérimentale, réalisée sur un testbed GPU dédié à partir de traces synthétisées issues de conversations réelles et de distributions de longueur en loi de puissance (N=10000), démontre que Llumnix réduit les latences de queue d'un ordre de grandeur par rapport aux systèmes de serving LLM de référence, accélère les requêtes de haute priorité jusqu'à 1,5× et génère jusqu'à 36% d'économies de coût sans dégrader les latences de queue par rapport à l'état de l'art. Ces résultats positionnent Llumnix comme une nouvelle approche du serving de LLM, combinant efficacité, économie de coûts et support de SLOs différenciés.
+
+Cette revue vise à fournir un panorama actualisé des frameworks et bibliothèques ML/DL disponibles pour le data mining à grande échelle, en comparant leur support de parallélisme massif à l'ère du Big Data.
+
+Cette étude rétrospective évalue, sur 138 010 visites du service des urgences adultes de Stanford, la capacité de grands modèles de langage (LLM) de dernière génération à prédire les réadmissions à 30 jours aux urgences, en comparaison avec une approche de machine learning traditionnelle (LightGBM) entraînée sur des données structurées du dossier médical électronique. Cinq approches basées sur des LLM ont été testées : prédiction directe par prompting zero-shot avec ou sans génération augmentée par récupération (RAG) en utilisant Claude 3.7, OpenAI o3-mini, Deepseek R1 et GPT-4o, ainsi que des méthodes fondées sur des embeddings (LLM2Vec, Voyage-3-Large) combinées à une classification par similarité, un LightGBM sur embeddings, ou une recherche par k plus proches voisins. Les résultats montrent que les approches par embeddings surpassent systématiquement la prédiction directe, et que le RAG améliore les performances de la prédiction directe pour tous les LLM évalués, mais qu'aucune approche basée sur les LLM (F1=0,3022-0,4505) ne parvient à dépasser le modèle LightGBM de référence (F1=0,4614), malgré l'accès des LLM à des données cliniques structurées et non structurées plus riches. L'analyse des chaînes de raisonnement révèle que le raisonnement explicite des LLM peut dégrader systématiquement la performance prédictive, via une aversion au risque excessive, une surpondération des antécédents médicaux et des visites similaires, et une négligence des facteurs protecteurs. Les auteurs concluent que la valeur principale des LLM dans cette tâche réside davantage dans l'apprentissage de représentations (embeddings) que dans un raisonnement de bout en bout, et que les méthodes fondées sur la récupération (RAG, KNN) offrent un compromis favorable entre performance et interprétabilité clinique.
+
+Cette section introductive présente une revue systématique de la littérature (SLR) portant sur l'application des Large Language Models (LLMs) en Ingénierie Logicielle (Software Engineering, SE), un domaine désigné par l'acronyme LLM4SE. Les auteurs soulignent que la transition des modèles de langage traditionnels vers les LLMs, permise par l'augmentation de la puissance de calcul et l'accès à des données à très grande échelle, a ouvert des perspectives nouvelles pour reformuler des défis de SE en tâches d'analyse de données, de code ou de texte. Bien que plusieurs revues de littérature existent déjà sur ce sujet, elles présentent des limites significatives : un périmètre restreint à une seule tâche de SE, une focalisation sur les modèles de Machine Learning ou Deep Learning antérieurs sans intégrer les LLMs récents comme ChatGPT, ou une absence de méthodologie systématique rigoureuse. Face à cette lacune, l'étude propose une SLR suivant la méthodologie de Kitchenham et al., ayant permis d'identifier et d'analyser 395 articles pertinents couvrant la période de janvier 2017 à janvier 2024, classifiant les LLMs par architecture (encoder-only, decoder-only, etc.) et recensant 85 tâches spécifiques de SE regroupées en six activités principales.
+
+Cet éditorial présente et synthétise un Research Topic de la revue Frontiers in Robotics and AI consacré à la convergence entre les grands modèles de langage (LLMs) et l'intelligence computationnelle appliquée aux systèmes robotiques avancés. Il rassemble cinq articles de recherche originaux couvrant des applications variées : robots d'assistance en supermarché, téléopération bimanuelle, navigation pour robots de soins à domicile, robots éducatifs et AutoML. Les auteurs montrent que les LLMs ne sont pas de simples générateurs de texte mais des interfaces efficaces permettant aux robots de comprendre l'intention humaine, de s'adapter aux utilisateurs et d'exécuter des tâches complexes en conditions réelles. Ils soulignent également qu'un ensemble coordonné de modèles plus petits et spécialisés par tâche peut constituer une alternative pratique à un unique grand modèle. L'éditorial conclut en identifiant des défis persistants — fiabilité des tâches ancrées, coût computationnel sur matériel limité, évaluation de l'interaction homme-robot à long terme — et appelle à des travaux futurs sur les LLMs multimodaux et les études longitudinales des relations homme-robot.
+
+
+## Methodologie
+
+
+Cet article présente Llumnix, un système d'ordonnancement dynamique pour le service (serving) de grands modèles de langage (LLM), motivé par la diversité croissante des applications et des exigences de latence associées à des modèles de plus en plus task-agnostic et capables de traiter des séquences toujours plus longues. Les auteurs soulignent que la nature autorégressive de l'inférence LLM, décomposée en phases de prefill et de decode, ainsi que la nécessité de gérer dynamiquement le KV cache via des techniques comme PagedAttention, complexifient l'ordonnancement des requêtes et peuvent entraîner des files d'attente ou des préemptions lorsque la mémoire GPU devient insuffisante. Pour évaluer Llumnix, les auteurs ont conduit des expériences sur un cluster de 16 GPU NVIDIA A10, avec les modèles LLaMA-7B et LLaMA-30B, en utilisant des traces synthétiques de 10 000 requêtes construites à partir de jeux de données réels de conversations (ShareGPT, BurstGPT) et de distributions de longueurs en loi de puissance simulant des charges de travail à longue traîne. Llumnix a été comparé à trois approches de référence (dispatching round-robin, INFaaS++ et Llumnix-base) selon des métriques de latence end-to-end, de prefill et de decode, en moyenne et au 99e percentile.
+
+Cette section introductive présente une revue systématique de la littérature (SLR) portant sur l'application des Large Language Models (LLMs) en Ingénierie Logicielle (Software Engineering, SE), un domaine désigné par l'acronyme LLM4SE. Les auteurs soulignent que la transition des modèles de langage traditionnels vers les LLMs, permise par l'augmentation de la puissance de calcul et l'accès à des données à très grande échelle, a ouvert des perspectives nouvelles pour reformuler des défis de SE en tâches d'analyse de données, de code ou de texte. Bien que plusieurs revues de littérature existent déjà sur ce sujet, elles présentent des limites significatives : un périmètre restreint à une seule tâche de SE, une focalisation sur les modèles de Machine Learning ou Deep Learning antérieurs sans intégrer les LLMs récents comme ChatGPT, ou une absence de méthodologie systématique rigoureuse. Face à cette lacune, l'étude propose une SLR suivant la méthodologie de Kitchenham et al., ayant permis d'identifier et d'analyser 395 articles pertinents couvrant la période de janvier 2017 à janvier 2024, classifiant les LLMs par architecture (encoder-only, decoder-only, etc.) et recensant 85 tâches spécifiques de SE regroupées en six activités principales.
+
+
+## Discussion
+
+
+La conclusion de l'article présente Llumnix comme une réalisation concrète de la vision consistant à concevoir le serving des grands modèles de langage (LLM) selon les principes des systèmes d'exploitation de type Unix, motivée par les similitudes entre LLM et OS modernes en termes d'universalité, de multi-tenance et de dynamisme. Les auteurs transposent des abstractions classiques des systèmes d'exploitation — isolation, gestion des priorités et changement de contexte — au domaine du serving LLM, ce dernier étant implémenté via la migration de requêtes d'inférence et une reprogrammation dynamique et continue des requêtes. L'évaluation expérimentale, réalisée sur un testbed GPU dédié à partir de traces synthétisées issues de conversations réelles et de distributions de longueur en loi de puissance (N=10000), démontre que Llumnix réduit les latences de queue d'un ordre de grandeur par rapport aux systèmes de serving LLM de référence, accélère les requêtes de haute priorité jusqu'à 1,5× et génère jusqu'à 36% d'économies de coût sans dégrader les latences de queue par rapport à l'état de l'art. Ces résultats positionnent Llumnix comme une nouvelle approche du serving de LLM, combinant efficacité, économie de coûts et support de SLOs différenciés.
+
+
+## Quote
+
+
+Llumnix delivers better latency, cost efficiency, and support for differentiated SLOs, pointing to a new way of LLM serving.
+
+Llumnix delivers better latency, cost efficiency, and support for differentiated SLOs, pointing to a new way of LLM serving.
+
+Llumnix améliore les latences de queue (tail latencies) d'un ordre de grandeur par rapport aux systèmes de serving LLM state-of-the-art; Llumnix accélère les requêtes de haute priorité jusqu'à 1.5× par rapport aux baselines
+
+generative AI and large language models (LLMs) that hold great potential in various aspects of testing, such as test case generation, prioritization, and oracle prediction
+
+Large language models (LLMs) may now perform exceptionally well on a variety of tasks thanks to recent developments in artificial intelligence (AI) and natural language processing (NLP). However, there are drawbacks when
+
+Large language models (LLMs) represent a paradigm shift in clinical NLP, offering zero-/few-shot learning capabilities through prompt engineering and demonstrating strong performance in clinical information extraction without task-specific fine-tuning
+
+Llumnix permet jusqu'à 36% d'économies de coût tout en conservant des latences de queue similaires à celles des systèmes state-of-the-art
+
+The success of our approach suggests that the rich learning capacity of large language models can effectively compensate for limited task-specific training data.
+
+iterative refinement and error recovery... where the LLM provides high-level reasoning and domain tools provide precision
+
+Large Language Models (LLMs) are capable of producing more accurate responses when assisted by a PDF parser that effectively extracts and integrates structured information from documents into the prompts.
+
+Future work should explore multimodal LLMs that integrate vision and language in real time, as well as longitudinal studies on sustained human-robot relationships.
+
+How can Large Language Models be leveraged to guide researchers through the complete automation of data processing pipelines, from initial design to production deployment, without requiring advanced programming or DevOps expertise?
+
+DL algorithms require large, high-quality annotated datasets to achieve robust performance.
+
+we designed a set of experiments comparing four prompting/architecture configurations across multiple large language models: (1) Single-LLM QPrompt, (2) Single-LLM GPrompt, (3) Multi-agent QPrompt, and (4) Multi-agent GPrompt.
+
+
+## Insight
+
+
+efficacy: Llumnix réduit les latences de queue (tail latencies) d'un ordre de grandeur par rapport aux systèmes de serving LLM état de l'art et accélère les requêtes de haute priorité jusqu'à 1,5× par rapport aux baselines.
+
+efficacy: Llumnix réduit les latences de queue (tail latencies) d'un ordre de grandeur par rapport aux systèmes de serving LLM de l'état de l'art, tout en accélérant jusqu'à 1,5× les requêtes de haute priorité.
+
+cost efficiency: Llumnix permet jusqu'à 36% d'économies de coût tout en maintenant des latences de queue comparables à celles des systèmes de serving LLM state-of-the-art.
+
+methodology: L'approche de Llumnix repose sur la transposition d'abstractions classiques des systèmes d'exploitation — isolation, priorités et changement de contexte — au serving de LLM, ce dernier étant implémenté via la migration de requêtes d'inférence et une reprogrammation continue et dynamique.
+
+efficacy: Les grands modèles de langage démontrent des capacités notables pour analyser des dossiers médicaux volumineux, interpréter des données cliniques complexes et générer des synthèses pertinentes, ce qui les positionne comme des outils potentiellement utiles à l'aide au diagnostic, à la décision thérapeutique, à l'éducation médicale et à la recherche en santé.
+
+
+## Conclusion
+
+
+Llumnix concrétise la vision de servir les LLMs 'comme Unix', en tirant parti d'analogies avec les systèmes d'exploitation modernes (universalité, multi-tenancy, dynamisme) pour définir des abstractions classiques (isolation, priorités) dans le contexte du serving de LLMs. L'implémentation du 'context switching' via la migration de requêtes d'inférence, combinée à un reordonnancement dynamique et continu exploitant cette migration, permet à Llumnix d'offrir de meilleures latences, une meilleure efficacité de coût, et un support pour des SLOs différenciés.
+
+Large language models can reliably perform syntax-only repairs on short student code snippets, often conforming well to explicit prompt instructions Models occasionally exceed minimal correction scope with stylistic or structural edits, reflecting an ongoing challenge in pedagogical alignment of LLMs in educational settings By recovering uncompilable submissions, this work enables richer and more comprehensive analyses of learners' coding processes and development over time

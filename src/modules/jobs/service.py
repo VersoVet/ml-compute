@@ -36,18 +36,31 @@ async def submit_job(
 
         client = JobSubmissionClient(address=RAY_DASHBOARD_URL)
 
-        # Ray 2.35.0 JobSubmissionClient.submit_job() is synchronous, not async
-        # Filter out unsupported kwargs (num_cpus, num_gpus are not directly supported)
+        # Map submit_kwargs to JobSubmissionClient parameters
+        kwargs = submit_kwargs or {}
+        entrypoint_num_gpus = kwargs.pop("num_gpus", None)
+        entrypoint_num_cpus = kwargs.pop("num_cpus", None)
+        entrypoint_memory = kwargs.pop("memory", None)
+
+        # Default: training jobs always require GPU to avoid CPU scheduling on head
+        if entrypoint_num_gpus is None and entrypoint_num_cpus is None:
+            entrypoint_num_gpus = 1
+            logger.info(f"Job {name}: defaulting to num_gpus=1 (force GPU worker)")
+
+        # Filter remaining kwargs to only supported ones
         supported_kwargs = {}
-        for key in submit_kwargs or {}:
-            if key not in ("num_cpus", "num_gpus", "memory"):
-                supported_kwargs[key] = submit_kwargs[key]
+        for key in kwargs:
+            if key in ("submission_id", "entrypoint_resources"):
+                supported_kwargs[key] = kwargs[key]
 
         job_id = client.submit_job(
             entrypoint=entrypoint,
             job_id=None,
             runtime_env=runtime_env or {},
             metadata={"name": name},
+            entrypoint_num_gpus=entrypoint_num_gpus,
+            entrypoint_num_cpus=entrypoint_num_cpus,
+            entrypoint_memory=entrypoint_memory,
             **supported_kwargs,
         )
 

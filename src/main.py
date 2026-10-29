@@ -25,14 +25,13 @@ from src.models import (
 )
 from src.modules.compute_backends import routes as compute_routes
 from src.modules.compute_backends.service import BackendManager
+from src.modules.gpu import routes as gpu_routes
 from src.modules.jobs import routes as jobs_routes
 from src.modules.models import routes as models_routes
 from src.modules.nodes import routes as nodes_routes
 from src.modules.nomad import routes as nomad_routes
 from src.modules.nomad.service import NomadManager
-from src.modules.sam import routes as sam_routes
 from src.modules.serve import routes as serve_routes
-from src.modules.serve_proxy import routes as serve_proxy_routes
 
 logger = logging.getLogger("ml-compute")
 
@@ -151,10 +150,9 @@ app.include_router(jobs_routes.router, prefix="/api/jobs", tags=["jobs"])
 app.include_router(nodes_routes.router, prefix="/api/nodes", tags=["nodes"])
 app.include_router(nomad_routes.router, prefix="/api/nomad", tags=["nomad"])
 app.include_router(serve_routes.router, prefix="/api/serve", tags=["serve"])
-app.include_router(sam_routes.router, prefix="/api/serve", tags=["SAM Control"])
-app.include_router(serve_proxy_routes.router, prefix="/api/serve", tags=["SAM"])
 app.include_router(models_routes.router, prefix="/api/models", tags=["models"])
 app.include_router(compute_routes.router, prefix="/api", tags=["compute"])
+app.include_router(gpu_routes.router, prefix="/api/gpu", tags=["gpu"])
 
 
 @app.get("/health", response_model=HealthResponse, tags=["status"])

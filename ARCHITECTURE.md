@@ -8,7 +8,9 @@
 3. **Nomad** — Allocation exclusive des GPUs (anti-conflit CUDA entre jobs)
 4. **FastAPI** — API unifiee pour les skills metier (bone-ml, bone-annotator, bone-recognition)
 
-**Hors scope** : SAM/MedSAM inference et CVAT sont geres directement par **bone-annotator** sur OnyxCortex, sans passer par Ray ni ml-compute (voir section "Separation SAM").
+5. **GPU Management** — Acquire/release GPU sur OnyxCortex (stop/start SAM+MedSAM2 pour liberer VRAM)
+
+**Hors scope** : SAM/MedSAM inference et CVAT sont geres directement par **bone-annotator** sur OnyxCortex, sans passer par Ray ni ml-compute (voir section "Separation SAM"). Cependant ml-compute gere l'allocation GPU via les endpoints `/api/gpu/*` (arret/relance des containers SAM pour liberer la VRAM avant training).
 
 ---
 
@@ -27,28 +29,80 @@ OnyxSoma (10.0.0.44) — Ray Head Node + ml-compute API
 
 ### Ray Workers (Execution training)
 ```
-OnyxCortex (10.0.0.26) — GPU Training PRINCIPAL
+OnyxCortex (10.0.0.26) — GPU Training (ACTUEL, transitoire)
 ├── Hardware: 16-core i7-10700KF, RTX 4070 SUPER 12GB, 46GB RAM
 ├── Config: num_cpus=16, num_gpus=1, shm-size=10GB
 ├── Local Storage: /data/ml (916 GB SSD) <- Training I/O optimized
-└── Usage: bone-ml Dual-Head U-Net training (GPU-bound)
+└── Usage: bone-rotation, bone-ml training (GPU-bound)
+    GPU partagé avec SAM/MedSAM2 via /api/gpu/acquire|release
 
-Glia (10.0.0.8) — CPU Training FALLBACK
-├── Hardware: 2x Xeon E5-2630, 20 cores, 47GB RAM
-├── Config: num_cpus=20, num_gpus=0, shm-size=20GB
-└── Usage: CPU-only jobs, fallback if Cortex busy
-
-OnyxPoint (10.0.0.86) — GPU Training SECONDAIRE
-├── Hardware: i5-10400, NVIDIA T1000 8GB, 23GB RAM
-├── Config: num_cpus=10, num_gpus=1, shm-size=8GB
-└── Usage: Jobs GPU legers, YOLO inference
+⚠️  Glia (10.0.0.8) — RETIRÉE DU CLUSTER (machine hors service)
+⚠️  OnyxPoint (10.0.0.86) — MACHINE DÉDIÉE GROBID (HORS CLUSTER RAY)
 ```
+
+### Contrainte d'extension GPU OnyxPoint
+
+Audit matériel du 2026-10-29 : Lenovo ThinkCentre M70s SFF (type 11EX), Core i5-10400.
+
+- L'unique slot PCIe 3.0 x16 low-profile est occupé par la NVIDIA T1000 8 Go (50 W).
+- Il reste un slot PCIe 3.0 x1 low-profile ; ce n'est pas un second slot GPU x16.
+- Le châssis accepte des cartes de moins de 155 mm de long et 68 mm de haut : aucune carte
+  pleine hauteur ne peut être installée directement.
+- Les deux autres ouvertures arrière sont des supports factices, sans connecteur PCIe.
+- Un montage x1 avec riser, carte et alimentation externes serait un bricolage hors châssis,
+  limité en bande passante et non retenu pour la production.
+
+**Décision** : conserver OnyxPoint avec sa seule T1000 pour GROBID. Installer toute GPU
+supplémentaire pleine hauteur dans les rigs ASRock H510 BTC+ prévus à cet effet.
 
 ### Volumes NFS (tous les workers)
 ```
 /mnt/ml-store  (read-write) — datasets, models, runs (10.0.0.6:/srv/nas/ml)
 /mnt/bonestore (read-only)  — images fluoroscopiques (10.0.0.52:/srv/bones)
 ```
+
+---
+
+## Rigs IA (FUTUR — 3× ASRock H510 BTC+)
+
+Infrastructure GPU dediee en cours d'assemblage (3 cartes meres, 9 GPU recues, 5 a venir).
+Remplacera OnyxCortex comme worker principal. VRAM totale : 168 Go.
+
+### Rig 1 — Puissance (LLM + Training PARTAGÉ) — PSU 1200W
+```
+Slot x16 : RTX 3090 24 Go ─┐ vLLM Qwen2.5 72B Q4 (tensor parallel)
+Slot 2   : RTX 3090 24 Go ─┘ → MODE PAR DEFAUT: LLM biblio (paper-reader, label-generator)
+                              → MODE TRAINING: stop vLLM → DataParallel 2×3090 (48 Go)
+Slot 3   : RTX 4070 Super 12 Go → training léger/fine-tuning (sans stopper vLLM)
+Slots 4+ : futures cartes (4080S 16Go, 5070 12Go, 5060Ti 16Go, 4060 8Go)
+```
+
+**Scheduling partagé 3090** :
+- **Défaut** : vLLM Qwen 72B Q4 sur 2×3090 (tensor parallel) — sert paper-reader,
+  label-generator, extraction formules SymPy, toute la bibliographie
+- **Training** : `POST /api/gpu/acquire?target=rig1` → stop vLLM → training ML
+  DataParallel sur 2×3090 (bone-rotation, bone-ml, bone-train) → release → restart vLLM
+- **Fallback** : RTX 4070 Super 12 Go pour jobs legers sans interrompre vLLM
+
+### Rig 2 — Services always-on (Inference) — PSU 850W
+```
+Slot 1 : RTX 2060 Super 8 Go → Ollama bge-m3 embeddings (dédié)
+Slot 2 : RTX 2060 Super 8 Go → SAM/MedSAM2 (CVAT annotation)
+Slot 3 : RTX 2060 Super 8 Go → bone-rotation + bone-ml inference
+Slot 4 : RTX 2060 Super 8 Go → Qwen2.5-VL 7B (OCR documents)
+Slot 5 : RTX 2060 Super 8 Go → spare
+Slot 6 : RTX 2060 Super 8 Go → spare
+```
+
+### Rig 3 — Expansion
+Vide, pour les cartes a venir.
+
+### Migration OnyxCortex → Rigs
+Quand les rigs sont assembles :
+1. RTX 4070 Super migre de Cortex vers rig 1 slot 3
+2. SAM/MedSAM2 migre de Cortex vers rig 2 slot 2
+3. Ray workers pointent vers rig 1 (multi-GPU) + rig 2 (inference)
+4. OnyxCortex libéré (CPU worker ou retiré du cluster)
 
 ---
 
@@ -70,10 +124,12 @@ OnyxSoma (10.0.0.44) — Nomad Server
 ├── Job scheduler
 └── GPU allocation tracking
 
-Workers Nomad Clients
-├── OnyxCortex (10.0.0.26) — 1 GPU RTX 4070 SUPER
-├── OnyxPoint (10.0.0.86)  — 1 GPU T1000 8GB
-└── Glia (10.0.0.8)        — CPU-only
+Workers Nomad Clients (actuel)
+└── OnyxCortex (10.0.0.26) — 1 GPU RTX 4070 SUPER
+
+Workers Nomad Clients (futur — rigs assembles)
+├── Rig 1 — 2× RTX 3090 + 1× RTX 4070 SUPER (training)
+└── Rig 2 — 6× RTX 2060 SUPER (inference always-on)
 ```
 
 ---
@@ -163,12 +219,53 @@ skill client → POST /api/compute/submit → BackendManager
                                             └── kaggle: kernels push → T4 GPU
 ```
 
-### 7. **sam/** et **serve_proxy/** (LEGACY proxy API)
-Modules proxy SAM historiques dans l'API FastAPI. SAM runtime est gere par bone-annotator.
-Ces modules API sont conserves temporairement mais seront supprimes.
+### 7. **gpu** (`src/modules/gpu/`)
+Gestion de l'allocation GPU multi-cible. Arret/relance de services GPU pour liberer la VRAM avant training.
 
-Le serveur Docker source reste dans `jobs/sam/sam_server.py` (image `sam-inference` sur OnyxCortex:9470).
-Contrat CVAT : `POST /api/embed` retourne `{blob, shape}` ; `SegmentationResponse` inclut `detail`.
+- `service.py`: get_gpu_status, acquire_gpu, release_gpu (via Docker API TCP)
+- `models.py`: GPUStatusResponse, GPUAcquireResponse, GPUReleaseResponse, GPUMode
+- `routes.py`: GET /api/gpu/status, POST /api/gpu/acquire, POST /api/gpu/release
+
+**Implémenté (OnyxCortex)** :
+- `POST /api/gpu/acquire` → stop SAM+MedSAM2 → libere ~6 Go VRAM sur Cortex
+- `POST /api/gpu/release` → restart SAM+MedSAM2
+
+**Design futur (Rig 1 — 3090 partagées LLM/Training)** :
+
+Le meme pattern acquire/release sera etendu pour gerer les 2×RTX 3090 du rig 1 :
+
+```
+POST /api/gpu/acquire?target=rig1
+  → stop vLLM (Qwen 72B tensor parallel sur 2×3090)
+  → libere 48 Go VRAM
+  → training DataParallel 2×3090 (bone-rotation, bone-ml, bone-train)
+
+POST /api/gpu/release?target=rig1
+  → restart vLLM
+  → biblio, paper-reader, label-generator operationnels
+
+GET /api/gpu/status?target=rig1
+  → mode (llm | training | idle), VRAM par GPU, vLLM running, jobs en cours
+```
+
+**Targets supportees** (a implementer quand rigs assembles) :
+
+| Target | GPUs | Mode defaut | Acquire = stop | Usage training |
+|--------|------|-------------|----------------|----------------|
+| `cortex` | RTX 4070S 12Go | inference (SAM) | SAM+MedSAM2 | bone-rotation, bone-ml |
+| `rig1` | 2×3090 48Go + 4070S 12Go | llm (vLLM) | vLLM Qwen 72B | DataParallel 2×3090 |
+| `rig1-light` | 4070S 12Go (rig1 slot 3) | idle | rien | fine-tuning sans stopper vLLM |
+
+**Workflow type training lourd** :
+```
+1. POST /api/gpu/acquire?target=rig1     → stop vLLM, 48Go libres
+2. POST /api/jobs { num_gpus: 2 }        → training DataParallel 2×3090
+3. (monitoring via /api/jobs/{id})
+4. POST /api/gpu/release?target=rig1     → restart vLLM
+```
+
+**Note**: Les modules legacy `sam/` et `serve_proxy/` ont ete supprimes (SAM gere par bone-annotator).
+Le serveur Docker SAM reste dans `jobs/sam/sam_server.py` (image `sam-inference` sur OnyxCortex:9470).
 
 ---
 
@@ -192,10 +289,21 @@ Dual-Head U-Net pour segmentation + landmarks heatmaps.
 
 ### bone-ml BoneSeg (`jobs/bone-ml/train_boneseg.py`)
 BoneSegNet (smp U-Net + MC-Dropout, ResNet50) pour segmentation osseuse multi-classe.
+- Entrypoint Ray : `python jobs/bone-ml/train_boneseg.py`
+- `runtime_env.working_dir` : `/opt/onyx/skills/ml-compute`
 - Soumis par bone-ml via `POST /api/jobs` (module boneseg)
 - Annotations PG `bone_annotations` avec tiers gold/silver/pseudo
 - Loss tier-weighted (CE + Dice), early stopping, checkpoint avec metadonnees
 - Update `boneseg_training_runs` en fin de job
+
+### bone-train BoneSeg (`jobs/bone-train/train_boneseg.py`)
+MONAI SwinUNETR 2D + MC-Dropout pour segmentation osseuse multi-classe.
+- Entrypoint Ray : `python jobs/bone-train/train_boneseg.py`
+- `runtime_env.working_dir` : `/opt/onyx/skills/ml-compute`
+- `runtime_env.py_modules` : `[/opt/onyx/skills/bone-train]`
+- Le wrapper ml-compute execute le job canonique `bone-train/jobs/train_boneseg.py` ;
+  le modele, les datasets MONAI, les transforms et la boucle de training restent geres par bone-train
+- Ray transfere le working directory et le module Python depuis OnyxSoma vers le driver GPU OnyxCortex
 
 ---
 
@@ -237,13 +345,16 @@ ml-compute/
 │       │   ├── models.py      # Pydantic models
 │       │   ├── routes.py      # /api/backends, /api/compute/*
 │       │   └── backends/      # local, lightning, kaggle
-│       ├── sam/                # [LEGACY] Proxy SAM
-│       └── serve_proxy/        # [LEGACY] Proxy SAM routes
+│       └── gpu/                # GPU management (acquire/release)
+│           ├── service.py     # Docker API calls to Cortex:2375
+│           ├── models.py      # GPUMode, GPUStatusResponse
+│           └── routes.py      # /api/gpu/*
 │
 ├── jobs/                       # Job templates Ray
 │   ├── bone-annotator/         # YOLO training
 │   ├── bone-recognition/       # EfficientNet training
-│   └── bone-ml/                # Dual-Head U-Net training
+│   ├── bone-ml/                # Dual-Head U-Net + BoneSegNet training
+│   └── bone-train/             # MONAI SwinUNETR training
 │
 ├── models/                     # Stockage modeles entraines
 ├── config/ml-compute.yaml      # Configuration centralisee

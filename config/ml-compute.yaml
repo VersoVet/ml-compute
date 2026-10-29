@@ -21,21 +21,19 @@ api:
   log_level: "info"
 
 workers:
-  onyxpoint:
-    ip: "10.0.0.86"
-    num_cpus: 10
+  onyxcortex:
+    ip: "10.0.0.26"
+    num_cpus: 16
     num_gpus: 1
-    ram_gb: 23
-    cpu_model: "Intel i5-10400"
-    gpu_type: "NVIDIA T1000 8GB"
-  glia:
-    ip: "10.0.0.8"
-    num_cpus: 20
-    ram_gb: 62
-    cpu_model: "2x Intel Xeon E5-2630"
-  axon:
-    ip: "10.0.0.21"
-    num_cpus: 4
+    ram_gb: 46
+    cpu_model: "Intel i7-10700KF"
+    gpu_type: "NVIDIA RTX 4070 SUPER 12GB"
+  # OnyxPoint (10.0.0.86) — RETIRÉ du cluster Ray
+  # Machine dédiée GROBID exclusivement (GPU T1000 8GB, 28Go RAM, 10 CPUs)
+  # NE PAS réajouter comme worker Ray — conflit de ressources GPU
+  #
+  # Glia (10.0.0.8) — RETIRÉE du cluster Ray (machine hors service)
+  # Axon (10.0.0.21) — Non connecté au cluster Ray
 
 models:
   base_dir: "/opt/onyx/skills/ml-compute/models"
