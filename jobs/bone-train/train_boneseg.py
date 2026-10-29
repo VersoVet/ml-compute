@@ -27,10 +27,13 @@ def find_bone_train_root() -> Path:
     candidates.extend(Path(item) for item in sys.path if item)
 
     for candidate in candidates:
-        job = candidate / "jobs" / "train_boneseg.py"
-        config = candidate / "config" / "bone-train.yaml"
-        if job.is_file() and config.is_file():
-            return candidate.resolve()
+        # Ray places a directory passed through py_modules below the generated
+        # package root (for example: <ray-package>/bone-train/).
+        for root in (candidate, candidate / "bone-train"):
+            job = root / "jobs" / "train_boneseg.py"
+            config = root / "config" / "bone-train.yaml"
+            if job.is_file() and config.is_file():
+                return root.resolve()
 
     raise RuntimeError(
         "bone-train source is missing from the Ray runtime. Submit with "

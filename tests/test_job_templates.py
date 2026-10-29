@@ -3,6 +3,7 @@
 Tests verify job template payload structure and environment variable handling.
 """
 
+import importlib.util
 import json
 from pathlib import Path
 
@@ -131,6 +132,25 @@ class TestJobTemplateFiles:
         content = template_path.read_text()
         assert "find_bone_train_root" in content
         assert 'jobs" / "train_boneseg.py' in content
+
+    def test_bone_train_resolves_ray_py_module_layout(self, tmp_path, monkeypatch):
+        """Resolve the nested directory layout produced by Ray py_modules."""
+        package_root = tmp_path / "ray-package"
+        bone_train_root = package_root / "bone-train"
+        (bone_train_root / "jobs").mkdir(parents=True)
+        (bone_train_root / "config").mkdir()
+        (bone_train_root / "jobs" / "train_boneseg.py").touch()
+        (bone_train_root / "config" / "bone-train.yaml").touch()
+
+        job_path = Path(__file__).parents[1] / "jobs" / "bone-train" / "train_boneseg.py"
+        spec = importlib.util.spec_from_file_location("bone_train_ray_job", job_path)
+        assert spec and spec.loader
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+
+        monkeypatch.delenv("BONE_TRAIN_ROOT", raising=False)
+        monkeypatch.syspath_prepend(str(package_root))
+        assert module.find_bone_train_root() == bone_train_root.resolve()
 
     def test_bone_recognition_readme_exists(self):
         """Test that bone-recognition README exists."""
