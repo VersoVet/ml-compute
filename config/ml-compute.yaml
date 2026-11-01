@@ -7,8 +7,6 @@ endpoints:
   nomad: "http://10.0.0.44:4646"
   ray_dashboard: "http://localhost:8265"
   ray_serve: "http://localhost:8000"
-  sam: "http://10.0.0.26:9470"
-
 ray:
   dashboard_url: "http://localhost:8265"
   serve_url: "http://localhost:8000"
@@ -51,9 +49,3 @@ serve:
 nomad:
   url: "http://10.0.0.44:4646"
   timeout: 30.0
-
-sam:
-  job_name: "sam-inference"
-  endpoint_port: 9470
-  host: "10.0.0.26"
-  job_spec_path: "/opt/onyx/skills/ml-compute/jobs/sam/sam_job_spec.json"

@@ -79,16 +79,18 @@ Endpoints /api/backends et /api/compute/*. Auto-selection local > lightning > ka
 ### BoneSeg training job
 
 - [x] Script `jobs/bone-ml/train_boneseg.py` (BoneSegNet, tier-weighted loss, PG update)
-- [x] Script `jobs/bone-train/train_boneseg.py` (wrapper Ray vers SwinUNETR canonique bone-train)
-- [x] Contrat Ray bone-train : working_dir ml-compute + source bone-train dans `py_modules`
+- [x] Script `jobs/bone-train/train_boneseg.py` (SwinUNETR — ship 2026-10-29)
+- [x] README A/B + zones label-generator
+- [ ] Deploy ml-compute pour publier `jobs/bone-train/` sur OnyxSoma
+- [ ] A/B GPU réel vs bone-ml — après GOLD ≥ 50
 
-### Nettoyage legacy SAM (2026-10-27 — PARTIEL)
+### Nettoyage legacy SAM (2026-10-27 — DONE)
 
 - [x] Supprimer le module `src/modules/sam/` (code legacy, SAM dans bone-annotator)
 - [x] Supprimer le module `src/modules/serve_proxy/` (proxy SAM legacy)
 - [x] Retirer les routers SAM de `main.py`
-- [ ] Supprimer `jobs/sam/` et `jobs/nuclio-sam-proxy/` (fichiers reference)
-- [ ] Retirer la section SAM de `config/ml-compute.yaml`
+- [x] Supprimer `jobs/sam/` et `jobs/nuclio-sam-proxy/`
+- [x] Retirer la section SAM de `config/ml-compute.yaml`
 
 ### GPU Management (2026-10-27 — DONE)
 
@@ -112,7 +114,7 @@ Endpoints /api/backends et /api/compute/*. Auto-selection local > lightning > ka
 
 ### Fix et ameliorations
 
-- [ ] Corriger `src/modules/jobs/tests/test_jobs.py` : mock async broken
+- [x] Corriger `src/modules/jobs/tests/test_jobs.py` : mock async broken
 - [ ] Connecter Axon (10.0.0.21) comme CPU Worker Ray
 - [ ] Dashboard UI frontend (React/Svelte sur `/`)
 - [ ] Alerting automatique via email-notification quand un job GPU fail

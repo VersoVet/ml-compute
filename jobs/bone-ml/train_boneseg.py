@@ -1,7 +1,8 @@
-"""Ray job: BoneSegNet training for per-bone segmentation.
+"""Ray job: BoneSegNet ResNet-UNet training on anatomical zones.
 
-Trains smp U-Net + MC-Dropout on validated zone annotations from PostgreSQL.
-Invoked by bone-ml via POST /api/jobs with entrypoint python jobs/bone-ml/train_boneseg.py.
+Trains smp U-Net + MC-Dropout on GOLD zone annotations from PostgreSQL.
+Class map comes from label-generator (accepted-labels), not whole-bones.
+Invoked by bone-ml via POST /api/boneseg/train → ml-compute jobs API.
 
 Requires NFS on the Ray worker:
 - /mnt/ml-store (models output)
@@ -87,7 +88,7 @@ async def _load_annotations(bone_type: str, tiers: list[str]) -> tuple[list[Any]
     from src.modules.boneseg.pg_loader import get_boneseg_annotations, get_test_set_ids
 
     test_ids = await get_test_set_ids(bone_type)
-    annotations = await get_boneseg_annotations(
+    annotations, _task_ids = await get_boneseg_annotations(
         bone_type,
         tiers=tiers,
         exclude_acquisition_ids=test_ids,
@@ -115,7 +116,7 @@ async def _load_test_annotations(
 
     from src.modules.boneseg.pg_loader import get_boneseg_annotations
 
-    all_anns = await get_boneseg_annotations(bone_type, tiers=tiers)
+    all_anns, _task_ids = await get_boneseg_annotations(bone_type, tiers=tiers)
     test_set = set(test_ids)
     return [ann for ann in all_anns if ann.acquisition_id in test_set]
 
@@ -245,7 +246,7 @@ def main() -> None:
     base_model = os.environ.get("BASE_MODEL", "")
     run_id = int(get_env("RUN_ID"))
     run_name = get_env("RUN_NAME")
-    tiers = [t.strip() for t in get_env("TIERS", "gold,silver").split(",") if t.strip()]
+    tiers = [t.strip() for t in get_env("TIERS", "gold").split(",") if t.strip()]
     ml_models_dir = get_env("ML_MODELS_DIR", "/mnt/ml-store/models")
     patience = int(os.environ.get("EARLY_STOPPING_PATIENCE", "15"))
     generation = _parse_generation(run_name)
@@ -254,8 +255,6 @@ def main() -> None:
     sys.path.insert(0, "/opt/onyx/skills/bone-ml")
 
     from src.modules.boneseg.config import (
-        BONE_CLASS_MAP,
-        BONE_CLASSES,
         EARLY_STOPPING_PATIENCE,
         ENCODER_NAME,
         TIER_WEIGHTS,
@@ -263,19 +262,9 @@ def main() -> None:
     from src.modules.boneseg.dataset import BoneSegDataset
     from src.modules.boneseg.losses import TierWeightedSegLoss
     from src.modules.boneseg.model import BoneSegNet
+    from src.modules.boneseg.taxonomy import fetch_zone_taxonomy, taxonomy_from_env
 
     patience = patience or EARLY_STOPPING_PATIENCE
-    n_classes = len(BONE_CLASSES)
-
-    logger.info(
-        "Config: bone=%s run=%s epochs=%d batch=%d img=%d tiers=%s",
-        bone_type,
-        run_name,
-        epochs,
-        batch_size,
-        img_size,
-        tiers,
-    )
 
     Path(ml_models_dir).mkdir(parents=True, exist_ok=True)
     model_path = Path(ml_models_dir) / f"{run_name}_best.pt"
@@ -284,6 +273,25 @@ def main() -> None:
     asyncio.set_event_loop(loop)
 
     try:
+        tax = taxonomy_from_env()
+        if tax is None:
+            tax = loop.run_until_complete(fetch_zone_taxonomy(bone_type))
+        class_names = tax.class_names
+        class_map = tax.class_map
+        n_classes = tax.n_classes
+
+        logger.info(
+            "Config: bone=%s run=%s epochs=%d batch=%d img=%d tiers=%s n_classes=%d zones=%d",
+            bone_type,
+            run_name,
+            epochs,
+            batch_size,
+            img_size,
+            tiers,
+            n_classes,
+            tax.n_zones,
+        )
+
         annotations, test_ids = loop.run_until_complete(_load_annotations(bone_type, tiers))
         if not annotations:
             raise RuntimeError(f"No annotations for {bone_type} tiers={tiers}")
@@ -327,8 +335,8 @@ def main() -> None:
                 model.load_state_dict(state, strict=False)
                 logger.info("Loaded base model: %s", ckpt_path)
 
-        train_ds = BoneSegDataset(train_anns, BONE_CLASS_MAP, img_size, TIER_WEIGHTS)
-        val_ds = BoneSegDataset(val_anns, BONE_CLASS_MAP, img_size, TIER_WEIGHTS)
+        train_ds = BoneSegDataset(train_anns, class_map, img_size, TIER_WEIGHTS)
+        val_ds = BoneSegDataset(val_anns, class_map, img_size, TIER_WEIGHTS)
         train_loader = DataLoader(
             train_ds,
             batch_size=batch_size,
@@ -380,7 +388,7 @@ def main() -> None:
 
             scheduler.step()
             val_dice, per_class = _evaluate(
-                model, val_loader, device, BONE_CLASSES, use_amp,
+                model, val_loader, device, class_names, use_amp,
             )
 
             if (epoch + 1) % 5 == 0 or epoch == 0:
@@ -401,7 +409,10 @@ def main() -> None:
                         "model_state_dict": model.state_dict(),
                         "n_classes": n_classes,
                         "encoder_name": ENCODER_NAME,
-                        "bone_classes": BONE_CLASS_MAP,
+                        "bone_classes": class_map,
+                        "class_names": class_names,
+                        "taxonomy_mode": "anatomical_zones",
+                        "taxonomy_hash": tax.hash,
                         "generation": generation,
                         "best_dice": best_dice,
                         "per_class_dice": best_per_class,
@@ -418,11 +429,11 @@ def main() -> None:
         test_dice: float | None = None
         test_anns = loop.run_until_complete(_load_test_annotations(bone_type, tiers, test_ids))
         if test_anns and model_path.exists():
-            test_ds = BoneSegDataset(test_anns, BONE_CLASS_MAP, img_size, TIER_WEIGHTS)
+            test_ds = BoneSegDataset(test_anns, class_map, img_size, TIER_WEIGHTS)
             test_loader = DataLoader(test_ds, batch_size=batch_size, shuffle=False, num_workers=2)
             checkpoint = torch.load(str(model_path), map_location=device, weights_only=False)
             model.load_state_dict(checkpoint["model_state_dict"])
-            test_dice, _ = _evaluate(model, test_loader, device, BONE_CLASSES, use_amp)
+            test_dice, _ = _evaluate(model, test_loader, device, class_names, use_amp)
             logger.info("Test Dice: %.4f (%d frames)", test_dice, len(test_anns))
 
         loop.run_until_complete(

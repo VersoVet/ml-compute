@@ -460,7 +460,7 @@ TIERS, PG_HOST/PORT/DB/USER/PASSWORD, LEARNING_RATE, WEIGHT_DECAY, ML_MODELS_DIR
 
 ### bone-train BoneSeg (`jobs/bone-train/train_boneseg.py`)
 
-Soumis par bone-train (`POST /api/boneseg/train`). Contrat Ray :
+Soumis par bone-train (`POST /api/boneseg/train`, port 8210). Contrat Ray :
 
 ```json
 {
@@ -473,10 +473,12 @@ Soumis par bone-train (`POST /api/boneseg/train`). Contrat Ray :
 }
 ```
 
-Le wrapper execute l'implementation canonique SwinUNETR de bone-train sur le driver GPU Ray.
+Ontologie zones label-generator ; gate GOLD ≥ 50 côté bone-train.
+A/B vs `jobs/bone-ml/train_boneseg.py` — voir `jobs/bone-train/README.md`.
 
 **Env vars** : BONE_TYPE, EPOCHS, BATCH_SIZE, BASE_MODEL, RUN_NAME, TIERS,
-PG_HOST/PORT/DB/USER/PASSWORD, LEARNING_RATE, WEIGHT_DECAY, ML_MODELS_DIR
+PG_HOST/PORT/DB/USER/PASSWORD, LABEL_GENERATOR_URL, LEARNING_RATE, WEIGHT_DECAY,
+ML_MODELS_DIR, BONESTORE_PATH
 
 ---
 
@@ -490,7 +492,7 @@ CVAT (OnyxSynapse) -> Nuclio -> SAM Docker (OnyxCortex:9470) [DIRECT]
 
 Ne passe PAS par Ray ni l'API ml-compute. Voir `bone-annotator/API.md`.
 
-Le **code source** du serveur Docker reste dans `jobs/sam/sam_server.py` (image `sam-inference:v3-multimodel`).
+Le code source legacy SAM a ete supprime de ml-compute. L'image `sam-inference` est geree par bone-annotator.
 
 ### Contrat CVAT `/api/embed` (serveur SAM :9470)
 

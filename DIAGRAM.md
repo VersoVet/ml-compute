@@ -100,22 +100,34 @@ graph LR
     API -->|services dedies| Services
 ```
 
-## BoneSeg Training Flow
+## BoneSeg Training Flow (A/B)
 
 ```mermaid
 sequenceDiagram
     actor BoneML as bone-ml :9463
+    actor BoneTrain as bone-train :8210
     participant API as ml-compute :9469
     participant Ray as Ray Head
     participant Worker as OnyxCortex GPU
     participant PG as PostgreSQL bone_annotations
 
+    Note over BoneML,BoneTrain: A/B : meme ontologie ZONES, memes test_sets
+
     BoneML->>PG: register_training_run
-    BoneML->>API: POST /api/jobs train_boneseg.py
+    BoneML->>API: POST /api/jobs train_boneseg.py (ResNet50)
     API->>Ray: submit job num_gpus=1
-    Ray->>Worker: train BoneSegNet
-    Worker->>PG: load annotations tiers
+    Ray->>Worker: train BoneSegNet smp U-Net
+    Worker->>PG: load GOLD annotations
     Worker->>Worker: train early stopping
+    Worker->>PG: update best_dice metrics
+    Worker-->>Ray: SUCCEEDED
+
+    BoneTrain->>PG: register_training_run
+    BoneTrain->>API: POST /api/jobs train_boneseg.py (SwinUNETR)
+    API->>Ray: submit job num_gpus=1
+    Ray->>Worker: train MONAI SwinUNETR
+    Worker->>PG: load GOLD annotations
+    Worker->>Worker: train + HD95
     Worker->>PG: update best_dice metrics
     Worker-->>Ray: SUCCEEDED
 ```
@@ -159,7 +171,7 @@ L'API `POST /api/gpu/acquire` stoppe SAM et MedSAM2 avant un training, puis
 `POST /api/gpu/release` les relance.
 
 **Protocole CVAT** : Nuclio appelle `POST http://10.0.0.26:9470/api/embed` qui doit
-retourner `{blob, shape}` (source : `jobs/sam/sam_server.py`, image `sam-inference`).
+retourner `{blob, shape}` (image `sam-inference`, gere par bone-annotator).
 
 ## Job Submission Flow
 

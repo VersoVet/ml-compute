@@ -1,7 +1,7 @@
 """Tests for Ray Jobs service layer."""
 
 import sys
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -34,23 +34,23 @@ def _mock_job_submission_client(
     client = MagicMock()
 
     if side_effect:
-        client.submit_job = AsyncMock(side_effect=side_effect)
-        client.get_job_status = AsyncMock(side_effect=side_effect)
-        client.get_job_logs = AsyncMock(side_effect=side_effect)
-        client.list_jobs = AsyncMock(side_effect=side_effect)
-        client.stop_job = AsyncMock(side_effect=side_effect)
+        client.submit_job = MagicMock(side_effect=side_effect)
+        client.get_job_status = MagicMock(side_effect=side_effect)
+        client.get_job_logs = MagicMock(side_effect=side_effect)
+        client.list_jobs = MagicMock(side_effect=side_effect)
+        client.stop_job = MagicMock(side_effect=side_effect)
     else:
-        client.submit_job = AsyncMock(return_value=submit_return)
+        client.submit_job = MagicMock(return_value=submit_return)
 
         status_mock = MagicMock()
         status_mock.value = status_return
-        client.get_job_status = AsyncMock(return_value=status_mock)
-        client.get_job_logs = AsyncMock(return_value=logs_return)
+        client.get_job_status = MagicMock(return_value=status_mock)
+        client.get_job_logs = MagicMock(return_value=logs_return)
 
         if list_return is None:
             list_return = []
-        client.list_jobs = AsyncMock(return_value=list_return)
-        client.stop_job = AsyncMock(return_value=None)
+        client.list_jobs = MagicMock(return_value=list_return)
+        client.stop_job = MagicMock(return_value=None)
 
     return client
 
@@ -120,7 +120,7 @@ async def test_submit_job_success() -> None:
     assert result["job_id"] == "raysubmit_xyz789"
     assert result["status"] == "SUBMITTED"
     assert result["name"] == "train-yolo"
-    mock_client.submit_job.assert_awaited_once()
+    mock_client.submit_job.assert_called_once()
 
 
 @pytest.mark.asyncio
@@ -157,8 +157,8 @@ async def test_get_job_status_success() -> None:
     assert result["job_id"] == "raysubmit_abc123"
     assert result["status"] == "SUCCEEDED"
     assert "Accuracy: 0.95" in result["logs_tail"]
-    mock_client.get_job_status.assert_awaited_once_with("raysubmit_abc123")
-    mock_client.get_job_logs.assert_awaited_once_with("raysubmit_abc123")
+    mock_client.get_job_status.assert_called_once_with("raysubmit_abc123")
+    mock_client.get_job_logs.assert_called_once_with("raysubmit_abc123")
 
 
 @pytest.mark.asyncio
@@ -240,7 +240,7 @@ async def test_delete_job_success() -> None:
 
     assert result["job_id"] == "raysubmit_abc123"
     assert result["status"] == "STOPPED"
-    mock_client.stop_job.assert_awaited_once_with("raysubmit_abc123")
+    mock_client.stop_job.assert_called_once_with("raysubmit_abc123")
 
 
 @pytest.mark.asyncio

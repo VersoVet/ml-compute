@@ -2,12 +2,12 @@
 
 from fastapi import APIRouter
 
+from src.modules.gpu import service
 from src.modules.gpu.models import (
     GPUAcquireResponse,
     GPUReleaseResponse,
     GPUStatusResponse,
 )
-from src.modules.gpu import service
 
 router = APIRouter()
 

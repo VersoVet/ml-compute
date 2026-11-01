@@ -264,8 +264,8 @@ GET /api/gpu/status?target=rig1
 4. POST /api/gpu/release?target=rig1     → restart vLLM
 ```
 
-**Note**: Les modules legacy `sam/` et `serve_proxy/` ont ete supprimes (SAM gere par bone-annotator).
-Le serveur Docker SAM reste dans `jobs/sam/sam_server.py` (image `sam-inference` sur OnyxCortex:9470).
+**Note**: Les modules legacy `sam/`, `serve_proxy/`, `jobs/sam/` et `jobs/nuclio-sam-proxy/` ont ete supprimes.
+SAM est entierement gere par bone-annotator (image `sam-inference` sur OnyxCortex:9470).
 
 ---
 
@@ -297,13 +297,14 @@ BoneSegNet (smp U-Net + MC-Dropout, ResNet50) pour segmentation osseuse multi-cl
 - Update `boneseg_training_runs` en fin de job
 
 ### bone-train BoneSeg (`jobs/bone-train/train_boneseg.py`)
-MONAI SwinUNETR 2D + MC-Dropout pour segmentation osseuse multi-classe.
+MONAI SwinUNETR 2D + MC-Dropout — second rideau S3 (hors bone-rotation).
 - Entrypoint Ray : `python jobs/bone-train/train_boneseg.py`
 - `runtime_env.working_dir` : `/opt/onyx/skills/ml-compute`
 - `runtime_env.py_modules` : `[/opt/onyx/skills/bone-train]`
-- Le wrapper ml-compute execute le job canonique `bone-train/jobs/train_boneseg.py` ;
-  le modele, les datasets MONAI, les transforms et la boucle de training restent geres par bone-train
-- Ray transfere le working directory et le module Python depuis OnyxSoma vers le driver GPU OnyxCortex
+- Ontologie = ZONES label-generator (même mapping que bone-ml multitask)
+- Gate GOLD (≥50 frames) côté bone-train — pas de GPU tant qu'insuffisant
+- A/B prévu vs `jobs/bone-ml/train_boneseg.py` (ResNet50) — même test_sets
+- Voir `jobs/bone-train/README.md`
 
 ---
 
