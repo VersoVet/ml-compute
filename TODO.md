@@ -61,20 +61,46 @@ Endpoints /api/backends et /api/compute/*. Auto-selection local > lightning > ka
 
 ## Taches actives
 
-### SAM / CVAT embed (2026-08-27)
+### Infrastructure GPU Rigs (2026-11-01 — EN COURS)
 
-- [x] Fix `jobs/sam/sam_server.py` : `/api/embed` retourne `blob` + `shape`
-- [x] Ajouter `detail` a `SegmentationResponse`
-- [x] Rebuild/restart container `sam-gpu` sur OnyxCortex (image sam-inference v0.2.3)
-- [x] Redeploy fonction MedSAM Nuclio si necessaire (bone-annotator) — fix v2 shapes 2026-08-28
+**Rig 1 — OnyxTensor** (10.0.0.73) — Training :
+- [x] Assemblage ASRock H510 BTC+, flash BIOS P1.60
+- [x] RTX 3080 10 Go validée sur PCIE1 x16
+- [x] RTX 4060 8 Go + RTX 2060 Super 8 Go sur risers x1
+- [x] Driver NVIDIA 580.196.07 installé
+- [x] WOL configuré (MAC a8:a1:59:97:e1:bf)
+- [ ] Installer Docker + NVIDIA Container Toolkit
+- [ ] Connecter comme Ray worker (num_gpus=3)
+- [ ] Ajouter RTX 4070 Super 12 Go (ex-Cortex) sur riser x1
 
-### Compute backends — prochaines etapes
+**Rig 2 — OnyxSynth** (10.0.0.78) — LLM :
+- [x] Assemblage ASRock H510 BTC+, flash BIOS P1.60
+- [x] 7 GPU : RTX 3080 (PCIE1) + 6× RTX 2060 Super (risers)
+- [x] Driver NVIDIA 580.178.04, Docker + NVIDIA toolkit
+- [x] llama.cpp compilé avec CUDA (sm_75 + sm_86)
+- [x] Qwen3-32B-Q8_0 téléchargé et opérationnel
+- [x] Service systemd `llm-server` (port 8080, auto-start)
+- [x] GPU 0 (3080) isolée du LLM (CUDA_VISIBLE_DEVICES=1,2,3,4,5,6)
+- [x] WOL configuré (MAC a8:a1:59:97:e6:9c)
+- [x] Swap 20 Go (4+16)
+- [ ] Connecter GPU 0 comme Ray worker (CUDA_VISIBLE_DEVICES=0)
 
-- [ ] Kaggle : debloquer GPU (verification telephonique en attente)
-- [ ] Lightning AI : optimiser gestion Studio (start/stop automatique, preservation credits)
-- [ ] Ajouter backend DigitalOcean (cle API stockee dans Vault)
-- [ ] Transfert fichiers : upload datasets / download modeles entre backends
-- [ ] Job queue : file d'attente si tous les backends GPU sont occupes
+**LLM Router** :
+- [x] Provider `onyx_synth` ajouté (onyx-qwen3-32b, http://10.0.0.78:8080)
+- [x] Task routing mis à jour : biblio, extraction, summarization → onyx_synth prioritaire
+- [ ] Redéployer llm-router sur OnyxSoma (docs obsolètes bloquent)
+
+**Paper-reader** :
+- [x] Config mise à jour : provider onyx_synth, model onyx-qwen3-32b
+- [ ] Redéployer paper-reader sur OnyxAxon (docs obsolètes bloquent)
+- [ ] Test lecture article scientifique via LLM local
+
+### Échange Cortex (à faire demain)
+
+- [ ] Retirer RTX 4070 Super de Cortex → Tensor riser x1
+- [ ] Tester RTX 5060 Ti 16 Go sur Cortex Z490 (Blackwell + UEFI)
+- [ ] Si 5060 Ti échoue → mettre RTX 2060 Super sur Cortex
+- [ ] Reconnecter Cortex Ray worker avec nouvelle GPU
 
 ### BoneSeg training job
 
@@ -84,38 +110,41 @@ Endpoints /api/backends et /api/compute/*. Auto-selection local > lightning > ka
 - [ ] Deploy ml-compute pour publier `jobs/bone-train/` sur OnyxSoma
 - [ ] A/B GPU réel vs bone-ml — après GOLD ≥ 50
 
-### Nettoyage legacy SAM (2026-10-27 — DONE)
-
-- [x] Supprimer le module `src/modules/sam/` (code legacy, SAM dans bone-annotator)
-- [x] Supprimer le module `src/modules/serve_proxy/` (proxy SAM legacy)
-- [x] Retirer les routers SAM de `main.py`
-- [x] Supprimer `jobs/sam/` et `jobs/nuclio-sam-proxy/`
-- [x] Retirer la section SAM de `config/ml-compute.yaml`
-
-### GPU Management (2026-10-27 — DONE)
-
-- [x] Module `src/modules/gpu/` : acquire/release GPU sur OnyxCortex
-- [x] Endpoints POST /api/gpu/acquire, POST /api/gpu/release, GET /api/gpu/status
-- [x] Docker TCP activé sur Cortex (10.0.0.26:2375, réseau interne)
-- [x] Arrêt/relance SAM+MedSAM2 containers pour libérer ~6 Go VRAM
-- [x] Auditer l'extension GPU OnyxPoint : x16 occupé par T1000, seul x1 low-profile libre ;
-      aucune carte pleine hauteur directement compatible (2026-10-29)
-
-### Cluster Ray (2026-10-27 — DONE)
-
-- [x] Restart ray-head (nouvelle session 2026-10-27)
-- [x] Reconnect ray-worker OnyxCortex
-- [x] Ajout volumes NFS au ray-head (/mnt/bonestore ro, /mnt/ml-store rw)
-- [x] shm_size=4g pour ray-head
-- [x] Install torch/torchvision/timm/blosc2 dans ray-worker
-- [x] Retrait Glia de la config (machine hors service)
-- [x] Nettoyage docker-compose (retrait service api, systemd gère l'API)
-- [x] Test job Ray : SUCCEEDED
-
 ### Fix et ameliorations
 
-- [x] Corriger `src/modules/jobs/tests/test_jobs.py` : mock async broken
+- [x] Corriger `src/modules/jobs/tests/test_jobs.py` : mock async → sync
+- [x] Nettoyage legacy SAM complet (modules, jobs, config)
+- [ ] Connecter OnyxTensor comme Ray worker
+- [ ] Connecter OnyxSynth GPU 0 comme Ray worker
 - [ ] Connecter Axon (10.0.0.21) comme CPU Worker Ray
 - [ ] Dashboard UI frontend (React/Svelte sur `/`)
 - [ ] Alerting automatique via email-notification quand un job GPU fail
-- [ ] Integration MLflow pour tracking des metrics de training
+
+---
+
+## Ressources GPU disponibles (état au 2026-11-01)
+
+### Ray Cluster (training)
+
+| Worker | GPU | VRAM | Status |
+|--------|-----|------|--------|
+| OnyxTensor (.73) | 3080 + 4060 + 2060S | 26 Go | à connecter |
+| OnyxSynth (.78) GPU 0 | 3080 | 10 Go | à connecter |
+| OnyxCortex (.26) | 4070 Super | 12 Go | actif (transitoire) |
+| **Total Ray** | **5 GPU** | **48 Go** | |
+
+### LLM dédié (hors Ray)
+
+| Machine | GPU | Modèle | Débit |
+|---------|-----|--------|-------|
+| OnyxSynth (.78) GPU 1-6 | 6× 2060 Super 48 Go | Qwen3-32B-Q8_0 | 10.2 tok/s |
+
+**API** : `http://10.0.0.78:8080/v1/chat/completions` — model `onyx-qwen3-32b`
+
+### Cartes spare
+
+| Carte | Raison |
+|-------|--------|
+| RTX 4080 Super 16 Go | VBIOS corrompu (Subsystem ID 0000) |
+| RTX 5060 Ti 16 Go | Incompatible H510 BTC+, test Cortex Z490 prévu |
+| RTX 5070 12 Go | Incompatible H510 BTC+ |

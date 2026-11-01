@@ -2,7 +2,15 @@
 
 **Base URL** : `http://10.0.0.44:9469`
 
-**Scope** : Orchestration training ML (Ray + Nomad). SAM/MedSAM est gere par bone-annotator (voir bone-annotator/API.md).
+**Scope** : Orchestration training ML (Ray + Nomad) sur le cluster GPU Onyx.
+
+**Cluster GPU** :
+- **OnyxTensor** (10.0.0.73) — 3 GPU (3080+4060+2060S, 26 Go) — training
+- **OnyxSynth** (10.0.0.78) GPU 0 — 1× 3080 (10 Go) — training overflow
+- **OnyxCortex** (10.0.0.26) — 1× 4070S (12 Go) — training + SAM (transitoire)
+- **OnyxSynth** GPU 1-6 — 6× 2060S (48 Go) — **LLM Qwen3-32B-Q8_0** (hors Ray, port 8080)
+
+SAM/MedSAM est gere par bone-annotator (voir bone-annotator/API.md).
 
 ---
 
@@ -516,7 +524,12 @@ curl http://10.0.0.26:9470/health
 
 ## GPU Management API
 
-Gestion de l'allocation GPU sur OnyxCortex. Permet de liberer la VRAM occupee par SAM/MedSAM2 (~6 Go) avant un training, puis de les relancer apres.
+Gestion de l'allocation GPU multi-cible. Permet de coordonner les GPU entre training et services d'inference.
+
+**Targets actuelles** :
+- `cortex` (defaut) — OnyxCortex RTX 4070S 12 Go — stop/start SAM+MedSAM2
+- `tensor` — OnyxTensor 3× GPU (3080+4060+2060S) 26 Go — training dedié
+- `synth` — OnyxSynth GPU 0 (RTX 3080 10 Go) — training overflow (GPU 1-6 = LLM reservé)
 
 ### GET /api/gpu/status
 Etat actuel du GPU et des containers d'inference.
@@ -579,6 +592,16 @@ curl -X POST http://10.0.0.44:9469/api/gpu/release
 ---
 
 ## Updates
+
+### [v0.3.3] 2026-11-01
+- Infrastructure GPU rigs : OnyxTensor (3 GPU, 26 Go) + OnyxSynth (7 GPU, 58 Go)
+- LLM local Qwen3-32B-Q8_0 sur OnyxSynth via llama.cpp (6× 2060S, 10.2 tok/s)
+- Service systemd `llm-server` (port 8080, API OpenAI compatible)
+- Provider `onyx_synth` (model `onyx-qwen3-32b`) ajouté au LLM Router
+- OnyxSynth GPU 0 (3080) disponible pour Ray, GPU 1-6 réservées LLM
+- OnyxTensor : 3080 (PCIE1 x16) + 4060 + 2060S (risers x1)
+- Nettoyage legacy SAM complet (jobs, config), fix tests async
+- Compatibilité H510 BTC+ P1.60 documentée (Blackwell incompatible)
 
 ### [v0.3.0] 2026-10-27
 - Module GPU management : acquire/release GPU sur OnyxCortex (stop/start SAM+MedSAM2)
