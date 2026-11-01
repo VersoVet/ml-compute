@@ -63,6 +63,7 @@ graph TB
     end
 
     RayHead -->|ray worker| Tensor
+    RayHead -->|ray worker GPU 0| S_3080
     RayHead -->|ray worker| Cortex
     NomadServer -->|GPU alloc| Tensor
 

@@ -43,9 +43,10 @@ OnyxCortex (10.0.0.26) — GPU Training + SAM (TRANSITOIRE)
 ├── Config: num_cpus=16, num_gpus=1, shm-size=10GB
 └── Usage: SAM/MedSAM2 + Ray worker (GPU à migrer vers Tensor)
 
-⚠️  OnyxSynth (10.0.0.78) — Rig 2 LLM DÉDIÉ (HORS CLUSTER RAY)
-    7 GPU dont 6 réservées au LLM Qwen3-32B-Q8_0 (llama.cpp)
-    GPU 0 (RTX 3080 10GB) isolée, potentiellement disponible pour Ray
+OnyxSynth (10.0.0.78) — Rig 2 GPU 0 uniquement
+├── GPU 0: RTX 3080 10GB (PCIE1 x16) — Ray worker (CUDA_VISIBLE_DEVICES=0)
+├── GPU 1-6: 6× RTX 2060 Super — LLM RÉSERVÉ (systemd llm-server, JAMAIS Ray)
+└── Config Ray: num_gpus=1 (GPU 0 seulement)
 ⚠️  Glia (10.0.0.8) — RETIRÉE DU CLUSTER (machine hors service)
 ⚠️  OnyxPoint (10.0.0.86) — MACHINE DÉDIÉE GROBID (HORS CLUSTER RAY)
 ```
@@ -249,10 +250,10 @@ Gestion de l'allocation GPU multi-cible. Arret/relance de services GPU pour libe
 |--------|---------|------|-------------|----------------|-------|
 | `cortex` | OnyxCortex .26 | RTX 4070S 12Go | inference (SAM) | SAM+MedSAM2 | training bone-ml |
 | `tensor` | OnyxTensor .73 | 3080+4060+2060S 26Go | training | rien | training multi-GPU |
-| `synth-spare` | OnyxSynth .78 GPU 0 | RTX 3080 10Go | idle (isolée du LLM) | rien | training overflow |
+| `synth` | OnyxSynth .78 GPU 0 | RTX 3080 10Go | Ray worker | rien | training overflow |
 
 **Note** : OnyxSynth GPU 1-6 (6×2060S) sont **exclusivement réservées au LLM** (systemd llm-server).
-Ne JAMAIS soumettre de jobs Ray sur ces GPU. Seule GPU 0 (3080 isolée) est potentiellement utilisable.
+Ne JAMAIS soumettre de jobs Ray sur ces GPU. GPU 0 (RTX 3080) est connectée à Ray (CUDA_VISIBLE_DEVICES=0).
 
 **Workflow training sur Tensor** :
 ```
