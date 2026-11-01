@@ -29,13 +29,23 @@ OnyxSoma (10.0.0.44) — Ray Head Node + ml-compute API
 
 ### Ray Workers (Execution training)
 ```
-OnyxCortex (10.0.0.26) — GPU Training (ACTUEL, transitoire)
+OnyxTensor (10.0.0.73) — Rig 1 GPU Training (ACTUEL)
+├── Hardware: Celeron G5905, 8GB RAM, PSU 1000W
+├── ASRock H510 Pro BTC+ (BIOS P1.60)
+├── GPU 0: RTX 3080 10GB (PCIE1 x16) — training principal
+├── GPU 1: RTX 4060 8GB (riser x1) — training secondaire
+├── GPU 2: RTX 2060 Super 8GB (riser x1) — training
+├── Total: 26 GB VRAM, 3 GPUs
+└── Config Ray: num_gpus=3 (à connecter)
+
+OnyxCortex (10.0.0.26) — GPU Training + SAM (TRANSITOIRE)
 ├── Hardware: 16-core i7-10700KF, RTX 4070 SUPER 12GB, 46GB RAM
 ├── Config: num_cpus=16, num_gpus=1, shm-size=10GB
-├── Local Storage: /data/ml (916 GB SSD) <- Training I/O optimized
-└── Usage: bone-rotation, bone-ml training (GPU-bound)
-    GPU partagé avec SAM/MedSAM2 via /api/gpu/acquire|release
+└── Usage: SAM/MedSAM2 + Ray worker (GPU à migrer vers Tensor)
 
+⚠️  OnyxSynth (10.0.0.78) — Rig 2 LLM DÉDIÉ (HORS CLUSTER RAY)
+    7 GPU dont 6 réservées au LLM Qwen3-32B-Q8_0 (llama.cpp)
+    GPU 0 (RTX 3080 10GB) isolée, potentiellement disponible pour Ray
 ⚠️  Glia (10.0.0.8) — RETIRÉE DU CLUSTER (machine hors service)
 ⚠️  OnyxPoint (10.0.0.86) — MACHINE DÉDIÉE GROBID (HORS CLUSTER RAY)
 ```
@@ -63,46 +73,49 @@ supplémentaire pleine hauteur dans les rigs ASRock H510 BTC+ prévus à cet eff
 
 ---
 
-## Rigs IA (FUTUR — 3× ASRock H510 BTC+)
+## Rigs IA — 2× ASRock H510 BTC+ (OPÉRATIONNEL)
 
-Infrastructure GPU dediee en cours d'assemblage (3 cartes meres, 9 GPU recues, 5 a venir).
-Remplacera OnyxCortex comme worker principal. VRAM totale : 168 Go.
-
-### Rig 1 — Puissance (LLM + Training PARTAGÉ) — PSU 1200W
+### Rig 1 — OnyxTensor (10.0.0.73) — Training — PSU 1000W
 ```
-Slot x16 : RTX 3090 24 Go ─┐ vLLM Qwen2.5 72B Q4 (tensor parallel)
-Slot 2   : RTX 3090 24 Go ─┘ → MODE PAR DEFAUT: LLM biblio (paper-reader, label-generator)
-                              → MODE TRAINING: stop vLLM → DataParallel 2×3090 (48 Go)
-Slot 3   : RTX 4070 Super 12 Go → training léger/fine-tuning (sans stopper vLLM)
-Slots 4+ : futures cartes (4080S 16Go, 5070 12Go, 5060Ti 16Go, 4060 8Go)
+PCIE1 x16 : RTX 3080 10 Go       → training principal (seul slot compatible 3080)
+Riser x1  : RTX 4060 8 Go        → training secondaire
+Riser x1  : RTX 2060 Super 8 Go  → training
+(1 slot mort, 1 riser libre)
+Total : 26 Go VRAM, 3 GPUs
 ```
 
-**Scheduling partagé 3090** :
-- **Défaut** : vLLM Qwen 72B Q4 sur 2×3090 (tensor parallel) — sert paper-reader,
-  label-generator, extraction formules SymPy, toute la bibliographie
-- **Training** : `POST /api/gpu/acquire?target=rig1` → stop vLLM → training ML
-  DataParallel sur 2×3090 (bone-rotation, bone-ml, bone-train) → release → restart vLLM
-- **Fallback** : RTX 4070 Super 12 Go pour jobs legers sans interrompre vLLM
+**Évolution prévue** : ajouter RTX 4070 Super 12 Go (ex-Cortex) sur riser x1 → 38 Go VRAM.
 
-### Rig 2 — Services always-on (Inference) — PSU 850W
+### Rig 2 — OnyxSynth (10.0.0.78) — LLM Biblio — PSU ?
 ```
-Slot 1 : RTX 2060 Super 8 Go → Ollama bge-m3 embeddings (dédié)
-Slot 2 : RTX 2060 Super 8 Go → SAM/MedSAM2 (CVAT annotation)
-Slot 3 : RTX 2060 Super 8 Go → bone-rotation + bone-ml inference
-Slot 4 : RTX 2060 Super 8 Go → Qwen2.5-VL 7B (OCR documents)
-Slot 5 : RTX 2060 Super 8 Go → spare
-Slot 6 : RTX 2060 Super 8 Go → spare
+PCIE1 x16 : RTX 3080 10 Go       → ISOLÉE (CUDA_VISIBLE_DEVICES exclut GPU 0)
+Riser x1  : RTX 2060 Super 8 Go  ─┐
+Riser x1  : RTX 2060 Super 8 Go  ─┤
+Riser x1  : RTX 2060 Super 8 Go  ─┤ LLM Qwen3-32B-Q8_0 via llama.cpp
+Riser x1  : RTX 2060 Super 8 Go  ─┤ tensor-split 8,8,8,8,8,8
+Riser x1  : RTX 2060 Super 8 Go  ─┤ 10.2 tok/s, port 8080
+Riser x1  : RTX 2060 Super 8 Go  ─┘
+Total : 58 Go VRAM (48 Go LLM + 10 Go isolée)
 ```
 
-### Rig 3 — Expansion
-Vide, pour les cartes a venir.
+**Service** : systemd `llm-server` (auto-start, restart on failure)
+**API** : `http://10.0.0.78:8080/v1/chat/completions` (OpenAI compatible)
+**Modèle** : `onyx-qwen3-32b` dans LLM Router
 
-### Migration OnyxCortex → Rigs
-Quand les rigs sont assembles :
-1. RTX 4070 Super migre de Cortex vers rig 1 slot 3
-2. SAM/MedSAM2 migre de Cortex vers rig 2 slot 2
-3. Ray workers pointent vers rig 1 (multi-GPU) + rig 2 (inference)
-4. OnyxCortex libéré (CPU worker ou retiré du cluster)
+### Compatibilité H510 BTC+ P1.60 (testée)
+
+| Carte | PCIE1 x16 | Riser x1 |
+|-------|-----------|----------|
+| RTX 2060 Super (175W) | ✅ | ✅ |
+| RTX 4060 (115W) | — | ✅ |
+| RTX 3080 (320W) | ✅ | ❌ trop gourmande |
+| RTX 5060 Ti / 5070 (Blackwell) | ❌ | ❌ incompatible BIOS |
+
+### Migration OnyxCortex → Rigs (en cours)
+1. RTX 4070 Super migre de Cortex vers Tensor riser x1 (Ada 200W, devrait passer)
+2. RTX 5060 Ti 16 Go teste sur Cortex Z490 (Blackwell compatible UEFI moderne)
+3. SAM/MedSAM2 reste sur Cortex (ou migre vers Synth GPU 0)
+4. Ray workers : Tensor (training multi-GPU) + Cortex (transitoire)
 
 ---
 
@@ -125,11 +138,11 @@ OnyxSoma (10.0.0.44) — Nomad Server
 └── GPU allocation tracking
 
 Workers Nomad Clients (actuel)
-└── OnyxCortex (10.0.0.26) — 1 GPU RTX 4070 SUPER
+├── OnyxCortex (10.0.0.26) — 1 GPU RTX 4070 SUPER (transitoire)
+└── OnyxTensor (10.0.0.73) — 3 GPU (3080 + 4060 + 2060S) — à connecter
 
-Workers Nomad Clients (futur — rigs assembles)
-├── Rig 1 — 2× RTX 3090 + 1× RTX 4070 SUPER (training)
-└── Rig 2 — 6× RTX 2060 SUPER (inference always-on)
+Worker hors Nomad
+└── OnyxSynth (10.0.0.78) — 7 GPU, LLM dédié (pas de training)
 ```
 
 ---
@@ -230,38 +243,22 @@ Gestion de l'allocation GPU multi-cible. Arret/relance de services GPU pour libe
 - `POST /api/gpu/acquire` → stop SAM+MedSAM2 → libere ~6 Go VRAM sur Cortex
 - `POST /api/gpu/release` → restart SAM+MedSAM2
 
-**Design futur (Rig 1 — 3090 partagées LLM/Training)** :
+**Design actuel — Targets GPU** :
 
-Le meme pattern acquire/release sera etendu pour gerer les 2×RTX 3090 du rig 1 :
+| Target | Machine | GPUs | Mode defaut | Acquire = stop | Usage |
+|--------|---------|------|-------------|----------------|-------|
+| `cortex` | OnyxCortex .26 | RTX 4070S 12Go | inference (SAM) | SAM+MedSAM2 | training bone-ml |
+| `tensor` | OnyxTensor .73 | 3080+4060+2060S 26Go | training | rien | training multi-GPU |
+| `synth-spare` | OnyxSynth .78 GPU 0 | RTX 3080 10Go | idle (isolée du LLM) | rien | training overflow |
 
+**Note** : OnyxSynth GPU 1-6 (6×2060S) sont **exclusivement réservées au LLM** (systemd llm-server).
+Ne JAMAIS soumettre de jobs Ray sur ces GPU. Seule GPU 0 (3080 isolée) est potentiellement utilisable.
+
+**Workflow training sur Tensor** :
 ```
-POST /api/gpu/acquire?target=rig1
-  → stop vLLM (Qwen 72B tensor parallel sur 2×3090)
-  → libere 48 Go VRAM
-  → training DataParallel 2×3090 (bone-rotation, bone-ml, bone-train)
-
-POST /api/gpu/release?target=rig1
-  → restart vLLM
-  → biblio, paper-reader, label-generator operationnels
-
-GET /api/gpu/status?target=rig1
-  → mode (llm | training | idle), VRAM par GPU, vLLM running, jobs en cours
-```
-
-**Targets supportees** (a implementer quand rigs assembles) :
-
-| Target | GPUs | Mode defaut | Acquire = stop | Usage training |
-|--------|------|-------------|----------------|----------------|
-| `cortex` | RTX 4070S 12Go | inference (SAM) | SAM+MedSAM2 | bone-rotation, bone-ml |
-| `rig1` | 2×3090 48Go + 4070S 12Go | llm (vLLM) | vLLM Qwen 72B | DataParallel 2×3090 |
-| `rig1-light` | 4070S 12Go (rig1 slot 3) | idle | rien | fine-tuning sans stopper vLLM |
-
-**Workflow type training lourd** :
-```
-1. POST /api/gpu/acquire?target=rig1     → stop vLLM, 48Go libres
-2. POST /api/jobs { num_gpus: 2 }        → training DataParallel 2×3090
+1. POST /api/jobs { target: "tensor", num_gpus: 1 }  → training sur 3080 (PCIE1 x16)
+2. POST /api/jobs { target: "tensor", num_gpus: 3 }  → training multi-GPU 3080+4060+2060S
 3. (monitoring via /api/jobs/{id})
-4. POST /api/gpu/release?target=rig1     → restart vLLM
 ```
 
 **Note**: Les modules legacy `sam/`, `serve_proxy/`, `jobs/sam/` et `jobs/nuclio-sam-proxy/` ont ete supprimes.

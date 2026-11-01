@@ -19,19 +19,42 @@ api:
   log_level: "info"
 
 workers:
+  onyxtensor:
+    ip: "10.0.0.73"
+    num_cpus: 2
+    num_gpus: 3
+    ram_gb: 8
+    cpu_model: "Intel Celeron G5905"
+    gpus:
+      - type: "NVIDIA RTX 3080 10GB"
+        pcie: "x16 Gen3"
+        role: "training_primary"
+      - type: "NVIDIA RTX 4060 8GB"
+        pcie: "x1 Gen3 riser"
+        role: "training_secondary"
+      - type: "NVIDIA RTX 2060 SUPER 8GB"
+        pcie: "x1 Gen3 riser"
+        role: "training"
+    comment: "Rig 1 — training dédié. Ajout RTX 4070S prévu (ex-Cortex)."
   onyxcortex:
     ip: "10.0.0.26"
     num_cpus: 16
     num_gpus: 1
     ram_gb: 46
     cpu_model: "Intel i7-10700KF"
-    gpu_type: "NVIDIA RTX 4070 SUPER 12GB"
-  # OnyxPoint (10.0.0.86) — RETIRÉ du cluster Ray
-  # Machine dédiée GROBID exclusivement (GPU T1000 8GB, 28Go RAM, 10 CPUs)
-  # NE PAS réajouter comme worker Ray — conflit de ressources GPU
+    gpus:
+      - type: "NVIDIA RTX 4070 SUPER 12GB"
+        pcie: "x16 Gen3"
+        role: "training + SAM/MedSAM2"
+    comment: "Transitoire — GPU migre vers Tensor, remplacée par 5060 Ti ou 2060S."
+  # OnyxSynth (10.0.0.78) — HORS CLUSTER RAY
+  # 7 GPU dont 6 réservées LLM Qwen3-32B-Q8_0 (systemd llm-server)
+  # GPU 0 (RTX 3080) isolée, potentiellement Ray mais non connectée
+  # NE PAS ajouter comme worker Ray — conflit avec LLM
   #
-  # Glia (10.0.0.8) — RETIRÉE du cluster Ray (machine hors service)
-  # Axon (10.0.0.21) — Non connecté au cluster Ray
+  # OnyxPoint (10.0.0.86) — GROBID dédié (T1000 8GB)
+  # Glia (10.0.0.8) — hors service
+  # Axon (10.0.0.21) — CPU only, non connecté Ray
 
 models:
   base_dir: "/opt/onyx/skills/ml-compute/models"

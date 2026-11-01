@@ -35,7 +35,7 @@ graph LR
 
 ---
 
-## Cluster Ray + Nomad
+## Cluster Ray + Rigs GPU
 
 ```mermaid
 graph TB
@@ -47,57 +47,47 @@ graph TB
         API --- NomadServer
     end
 
-    subgraph Workers["ML Workers actuels"]
-        Cortex["OnyxCortex (10.0.0.26)<br/>RTX 4070 SUPER 12GB<br/>16 cores, 46GB RAM<br/>Ray + Nomad client (transitoire)"]
+    subgraph Tensor["OnyxTensor (10.0.0.73) — Rig 1 Training"]
+        T_3080["GPU 0: RTX 3080 10Go<br/>PCIE1 x16"]
+        T_4060["GPU 1: RTX 4060 8Go<br/>riser x1"]
+        T_2060["GPU 2: RTX 2060S 8Go<br/>riser x1"]
     end
 
-    subgraph Dedicated["Machines hors cluster"]
-        OPoint["OnyxPoint (10.0.0.86)<br/>T1000 8GB<br/>GROBID dedie<br/>x16 occupe, aucun GPU pleine hauteur"]
-        Glia["Glia (10.0.0.8)<br/>Hors service"]
+    subgraph Synth["OnyxSynth (10.0.0.78) — Rig 2 LLM"]
+        S_3080["GPU 0: RTX 3080 10Go<br/>PCIE1 x16 (isolee)"]
+        S_LLM["GPU 1-6: 6x RTX 2060S<br/>Qwen3-32B-Q8_0<br/>llama.cpp :8080"]
     end
+
+    subgraph Cortex["OnyxCortex (10.0.0.26) — Transitoire"]
+        C_4070["RTX 4070S 12Go<br/>SAM + Ray worker"]
+    end
+
+    RayHead -->|ray worker| Tensor
+    RayHead -->|ray worker| Cortex
+    NomadServer -->|GPU alloc| Tensor
 
     subgraph Storage["NFS Storage"]
-        MLStore["/mnt/ml-store<br/>datasets, models, runs"]
-        BoneStore["/mnt/bonestore<br/>fluoroscopic images"]
+        MLStore["/mnt/ml-store"]
+        BoneStore["/mnt/bonestore"]
     end
 
-    RayHead -->|ray worker| Cortex
-    NomadServer -->|GPU alloc| Cortex
-
+    Tensor --- MLStore
     Cortex --- MLStore
     Cortex --- BoneStore
 
     subgraph Clients["Skills Clients"]
         BoneML["bone-ml"]
-        BoneAnnotator["bone-annotator"]
-        BoneRec["bone-recognition"]
+        PaperReader["paper-reader"]
+        LabelGen["label-generator"]
     end
 
     BoneML -->|POST /api/jobs| API
-    BoneAnnotator -->|POST /api/jobs| API
-    BoneRec -->|POST /api/jobs| API
-    BoneML -->|POST /api/boneseg/train| API
-```
+    PaperReader -->|chat/completions| S_LLM
+    LabelGen -->|chat/completions| S_LLM
 
-## Rigs IA cibles
-
-```mermaid
-graph LR
-    API["ml-compute API<br/>GPU acquire / release"]
-
-    subgraph Rig1["Rig 1 - puissance partagee"]
-        VLLM["2 x RTX 3090 - 48 Go<br/>defaut : vLLM Qwen 72B<br/>training : DataParallel"]
-        Light["RTX 4070 SUPER - 12 Go<br/>training leger"]
-    end
-
-    subgraph Rig2["Rig 2 - inference always-on"]
-        Services["6 x RTX 2060 SUPER<br/>SAM / MedSAM2 / bge-m3<br/>OCR / inference ML / spares"]
-    end
-
-    API -->|acquire rig1 : stop vLLM| VLLM
-    API -->|release rig1 : restart vLLM| VLLM
-    API -->|jobs legers| Light
-    API -->|services dedies| Services
+    style S_LLM fill:#2ecc71,color:#fff
+    style T_3080 fill:#3498db,color:#fff
+    style C_4070 fill:#e67e22,color:#fff
 ```
 
 ## BoneSeg Training Flow (A/B)
