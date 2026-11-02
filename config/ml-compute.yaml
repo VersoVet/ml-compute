@@ -47,18 +47,10 @@ workers:
         pcie: "x16 Gen3"
         role: "training + SAM/MedSAM2"
     comment: "Transitoire — GPU migre vers Tensor, remplacée par 5060 Ti ou 2060S."
-  onyxsynth:
-    ip: "10.0.0.78"
-    num_cpus: 2
-    num_gpus: 1
-    ram_gb: 8
-    gpus:
-      - type: "NVIDIA RTX 3080 10GB"
-        pcie: "x16 Gen3"
-        device_id: 0
-        role: "training"
-    comment: "Rig 2 — GPU 0 uniquement (3080 isolée). GPU 1-6 réservées LLM (CUDA_VISIBLE_DEVICES=0 pour Ray)."
-  # GPU 1-6 de Synth = LLM Qwen3-32B-Q8_0 (systemd llm-server) — JAMAIS dans Ray
+  # OnyxSynth (10.0.0.78) — HORS CLUSTER RAY
+  # 7 GPU toutes réservées au LLM Qwen3-32B-Q8_0 (systemd llm-server)
+  # tensor-split 10,8,8,8,8,8,8 — AUCUNE GPU dispo pour Ray
+  # NE PAS ajouter comme worker Ray
   #
   # OnyxPoint (10.0.0.86) — GROBID dédié (T1000 8GB)
   # Glia (10.0.0.8) — hors service
