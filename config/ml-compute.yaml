@@ -85,7 +85,7 @@ serve:
   http_timeout: 15.0
 
 database:
-  host: "10.0.0.59"
+  host: "10.0.0.8"
   port: 5432
   name: "bone_recognition"
   user: "onyx"
