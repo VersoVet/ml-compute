@@ -102,27 +102,21 @@ async def deploy_model(
     num_replicas: int = 1,
     **kwargs: Any,
 ) -> dict[str, Any]:
-    """Deploy a model as a Ray Serve application via Dashboard API.
-
-    Builds a Serve application config and submits it to the
-    Ray Dashboard PUT /api/serve/applications/ endpoint.
+    """Deploy a model as Ray Serve application via Dashboard PUT API.
 
     Args:
         name: Application/deployment name.
-        model_type: Model type (yolo, efficientnet, vllm).
+        model_type: Model type (bone-rotation, yolo, efficientnet, vllm, custom).
         model_path: Path to model weights file.
         num_replicas: Number of serving replicas.
-        **kwargs: Extra config (gpu_memory_utilization, node, etc).
+        **kwargs: Extra config (num_gpus, gpu_memory_utilization, etc).
 
     Returns:
         Deployment info dict with name, status, endpoint.
-
-    Raises:
-        RuntimeError: If deployment submission fails.
     """
     import_path = _resolve_import_path(model_type)
     if not import_path:
-        raise RuntimeError(f"Unsupported model type: {model_type}. Supported: yolo, efficientnet, vllm, custom")
+        raise RuntimeError(f"Unsupported model type: {model_type}")
 
     deployment_config: dict[str, Any] = {"num_replicas": num_replicas}
 
@@ -221,9 +215,84 @@ def _resolve_import_path(model_type: str) -> str | None:
         Python import path string, or None if unsupported.
     """
     import_paths: dict[str, str] = {
+        "bone-rotation": "src.serving.bone_rotation_app:app",
+        "bone-seg": "src.serving.bone_seg_app:app",
         "yolo": "src.serving.yolo_app:app",
         "efficientnet": "src.serving.efficientnet_app:app",
         "vllm": "src.serving.vllm_app:app",
         "custom": "src.serving.custom_app:app",
     }
     return import_paths.get(model_type)
+
+
+async def predict(app_name: str, payload: dict[str, Any]) -> dict[str, Any]:
+    """Forward prediction request to a running Ray Serve deployment.
+
+    Args:
+        app_name: Deployed Ray Serve application name.
+        payload: JSON-serializable request body for the model.
+
+    Returns:
+        Prediction result dict from the model deployment.
+    """
+    async with httpx.AsyncClient() as client:
+        r = await client.post(
+            f"{RAY_SERVE_URL}/{app_name}",
+            json=payload,
+            timeout=30.0,
+        )
+        r.raise_for_status()
+        return r.json()
+
+
+async def get_deployment_status(name: str) -> dict[str, Any]:
+    """Get detailed status of a specific Ray Serve application.
+
+    Args:
+        name: Application name.
+
+    Returns:
+        Status dict with application state, deployments, and replica info.
+    """
+    try:
+        async with httpx.AsyncClient() as client:
+            r = await client.get(
+                f"{RAY_DASHBOARD_URL}/api/serve/applications/",
+                timeout=HTTP_TIMEOUT,
+            )
+            r.raise_for_status()
+            data = r.json()
+
+        applications = data.get("applications", {})
+        if name not in applications:
+            raise RuntimeError(f"Application '{name}' not found")
+
+        app_info = applications[name]
+        deployments_info = []
+        for deploy_name, deploy_data in app_info.get("deployments", {}).items():
+            replica_states = deploy_data.get("replica_states", {})
+            deployments_info.append(
+                {
+                    "name": deploy_name,
+                    "status": deploy_data.get("status", "UNKNOWN"),
+                    "replicas_running": len(replica_states.get("RUNNING", [])),
+                    "replicas_starting": len(replica_states.get("STARTING", [])),
+                    "message": deploy_data.get("message", ""),
+                }
+            )
+
+        return {
+            "name": name,
+            "status": app_info.get("status", "UNKNOWN"),
+            "route_prefix": app_info.get("route_prefix", f"/{name}"),
+            "endpoint": f"{RAY_SERVE_URL}/{name}",
+            "deployments": deployments_info,
+            "message": app_info.get("message", ""),
+        }
+    except RuntimeError:
+        raise
+    except httpx.ConnectError:
+        raise RuntimeError("Ray Serve not reachable")
+    except Exception as e:
+        logger.error(f"Failed to get deployment status for {name}: {e}")
+        raise RuntimeError(f"Status check failed: {e}")

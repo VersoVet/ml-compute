@@ -73,17 +73,17 @@ Endpoints /api/backends et /api/compute/*. Auto-selection local > lightning > ka
 - [ ] Connecter comme Ray worker (num_gpus=3)
 - [ ] Ajouter RTX 4070 Super 12 Go (ex-Cortex) sur riser x1
 
-**Rig 2 — OnyxSynth** (10.0.0.78) — LLM :
+**Rig 2 — OnyxSynth** (10.0.0.78) — LLM DÉDIÉ (HORS CLUSTER RAY) :
 - [x] Assemblage ASRock H510 BTC+, flash BIOS P1.60
 - [x] 7 GPU : RTX 3080 (PCIE1) + 6× RTX 2060 Super (risers)
 - [x] Driver NVIDIA 580.178.04, Docker + NVIDIA toolkit
 - [x] llama.cpp compilé avec CUDA (sm_75 + sm_86)
 - [x] Qwen3-32B-Q8_0 téléchargé et opérationnel
 - [x] Service systemd `llm-server` (port 8080, auto-start)
-- [x] GPU 0 (3080) isolée du LLM (CUDA_VISIBLE_DEVICES=1,2,3,4,5,6)
+- [x] 7 GPU dédiées LLM (tensor-split 10,8,8,8,8,8,8)
 - [x] WOL configuré (MAC a8:a1:59:97:e6:9c)
 - [x] Swap 20 Go (4+16)
-- [ ] Connecter GPU 0 comme Ray worker (CUDA_VISIBLE_DEVICES=0)
+- ~~Connecter GPU 0 comme Ray worker~~ → **ANNULÉ** : les 7 GPU restent LLM
 
 **LLM Router** :
 - [x] Provider `onyx_synth` ajouté (onyx-qwen3-32b, http://10.0.0.78:8080)
@@ -95,12 +95,12 @@ Endpoints /api/backends et /api/compute/*. Auto-selection local > lightning > ka
 - [ ] Redéployer paper-reader sur OnyxAxon (docs obsolètes bloquent)
 - [ ] Test lecture article scientifique via LLM local
 
-### Échange Cortex (à faire demain)
+### OnyxCortex (Gigabyte Z490M, i7-10700KF, 46 Go RAM)
 
-- [ ] Retirer RTX 4070 Super de Cortex → Tensor riser x1
-- [ ] Tester RTX 5060 Ti 16 Go sur Cortex Z490 (Blackwell + UEFI)
-- [ ] Si 5060 Ti échoue → mettre RTX 2060 Super sur Cortex
-- [ ] Reconnecter Cortex Ray worker avec nouvelle GPU
+- [x] RTX 4070 Super 12 Go en place (slot x16)
+- [x] RTX 5060 Ti testée — **incompatible Z490M** (ne boot pas)
+- [ ] RTX 4060 non disponible (déjà sur Tensor)
+- [ ] Cortex reste mono-GPU (4070S), acquire/release pour training vs SAM
 
 ### BoneSeg training job
 
@@ -114,8 +114,10 @@ Endpoints /api/backends et /api/compute/*. Auto-selection local > lightning > ka
 
 - [x] Corriger `src/modules/jobs/tests/test_jobs.py` : mock async → sync
 - [x] Nettoyage legacy SAM complet (modules, jobs, config)
-- [ ] Connecter OnyxTensor comme Ray worker
-- [ ] Connecter OnyxSynth GPU 0 comme Ray worker
+- [x] Connecter OnyxTensor comme Ray worker (Docker + NVIDIA toolkit + ray-worker container, 2026-11-08)
+- ~~Connecter OnyxSynth GPU 0 comme Ray worker~~ → ANNULÉ (7 GPU = LLM)
+- [ ] Installer torch+timm+blosc2 dans ray-worker Tensor (même chose que Cortex — bloqueur pour Serve)
+- [ ] Image Docker custom `ray-worker-gpu` avec deps pré-installées (éviter pip install au restart)
 - [ ] Connecter Axon (10.0.0.21) comme CPU Worker Ray
 - [ ] Dashboard UI frontend (React/Svelte sur `/`)
 - [ ] Alerting automatique via email-notification quand un job GPU fail
@@ -129,15 +131,14 @@ Endpoints /api/backends et /api/compute/*. Auto-selection local > lightning > ka
 | Worker | GPU | VRAM | Status |
 |--------|-----|------|--------|
 | OnyxTensor (.73) | 3080 + 4060 + 2060S | 26 Go | à connecter |
-| OnyxSynth (.78) GPU 0 | 3080 | 10 Go | à connecter |
-| OnyxCortex (.26) | 4070 Super | 12 Go | actif (transitoire) |
-| **Total Ray** | **5 GPU** | **48 Go** | |
+| OnyxCortex (.26) | 4070 Super | 12 Go | actif |
+| **Total Ray** | **4 GPU** | **38 Go** | |
 
-### LLM dédié (hors Ray)
+### LLM dédié (hors Ray — JAMAIS de training)
 
 | Machine | GPU | Modèle | Débit |
 |---------|-----|--------|-------|
-| OnyxSynth (.78) GPU 1-6 | 6× 2060 Super 48 Go | Qwen3-32B-Q8_0 | 10.2 tok/s |
+| OnyxSynth (.78) | 7 GPU (3080 + 6×2060S) 58 Go | Qwen3-32B-Q8_0 | ~10 tok/s |
 
 **API** : `http://10.0.0.78:8080/v1/chat/completions` — model `onyx-qwen3-32b`
 

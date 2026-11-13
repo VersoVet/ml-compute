@@ -34,8 +34,9 @@ class JobResponse(BaseModel):
     """Job status response."""
 
     job_id: str = Field(..., description="Job ID")
-    status: str = Field(..., description="Job status: SUBMITTED/RUNNING/SUCCEEDED/FAILED")
+    status: str = Field(..., description="Job status: SUBMITTED/RUNNING/SUCCEEDED/FAILED/QUEUED")
     name: str = Field(..., description="Job name")
+    queue_position: int | None = Field(None, description="Position in GPU queue (if QUEUED)")
     submission_time: datetime | None = Field(None, description="Submission timestamp")
     start_time: datetime | None = Field(None, description="Start timestamp")
     end_time: datetime | None = Field(None, description="End timestamp")

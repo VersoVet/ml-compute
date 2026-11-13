@@ -4,7 +4,6 @@
 endpoints:
   core: "http://10.0.0.44:8050"
   vault: "http://10.0.0.44:8050/vault"
-  nomad: "http://10.0.0.44:4646"
   ray_dashboard: "http://localhost:8265"
   ray_serve: "http://localhost:8000"
 ray:
@@ -19,6 +18,24 @@ api:
   log_level: "info"
 
 workers:
+  onyxcortex:
+    ip: "10.0.0.26"
+    num_cpus: 16
+    num_gpus: 1
+    ram_gb: 46
+    cpu_model: "Intel i7-10700KF"
+    local_storage: "/data/ml"
+    gpus:
+      - id: "cortex-0"
+        type: "RTX 4070 SUPER 12GB"
+        vram_mb: 12288
+        pcie: "x16 Gen3"
+        role: "bone_training_primary"
+    labels:
+      bone_training: 1
+      training_gpu: 1
+    priority: 1
+    comment: "Worker prioritaire écosystème bone-learning. SAM/MedSAM2 stoppés, GPU 100% training."
   onyxtensor:
     ip: "10.0.0.73"
     num_cpus: 2
@@ -26,27 +43,22 @@ workers:
     ram_gb: 8
     cpu_model: "Intel Celeron G5905"
     gpus:
-      - type: "NVIDIA RTX 3080 10GB"
+      - id: "tensor-0"
+        type: "RTX 3080 10GB"
+        vram_mb: 10240
         pcie: "x16 Gen3"
-        role: "training_primary"
-      - type: "NVIDIA RTX 4060 8GB"
+      - id: "tensor-1"
+        type: "RTX 4060 8GB"
+        vram_mb: 8192
         pcie: "x1 Gen3 riser"
-        role: "training_secondary"
-      - type: "NVIDIA RTX 2060 SUPER 8GB"
+      - id: "tensor-2"
+        type: "RTX 2060 SUPER 8GB"
+        vram_mb: 8192
         pcie: "x1 Gen3 riser"
-        role: "training"
-    comment: "Rig 1 — training dédié. Ajout RTX 4070S prévu (ex-Cortex)."
-  onyxcortex:
-    ip: "10.0.0.26"
-    num_cpus: 16
-    num_gpus: 1
-    ram_gb: 46
-    cpu_model: "Intel i7-10700KF"
-    gpus:
-      - type: "NVIDIA RTX 4070 SUPER 12GB"
-        pcie: "x16 Gen3"
-        role: "training + SAM/MedSAM2"
-    comment: "Transitoire — GPU migre vers Tensor, remplacée par 5060 Ti ou 2060S."
+    labels:
+      training_gpu: 3
+    priority: 2
+    comment: "Rig 1 — overflow training quand Cortex occupé. Celeron = CPU faible, préférer Cortex."
   # OnyxSynth (10.0.0.78) — HORS CLUSTER RAY
   # 7 GPU toutes réservées au LLM Qwen3-32B-Q8_0 (systemd llm-server)
   # tensor-split 10,8,8,8,8,8,8 — AUCUNE GPU dispo pour Ray
@@ -59,16 +71,22 @@ workers:
 models:
   base_dir: "/opt/onyx/skills/ml-compute/models"
   supported_types:
+    - bone-rotation
+    - bone-seg
     - yolo
     - efficientnet
     - vllm
     - custom
 
 serve:
+  model_store: "/mnt/ml-store/models"
   default_num_replicas: 1
   default_gpu_memory_utilization: 0.7
   http_timeout: 15.0
 
-nomad:
-  url: "http://10.0.0.44:4646"
-  timeout: 30.0
+database:
+  host: "10.0.0.59"
+  port: 5432
+  name: "bone_recognition"
+  user: "onyx"
+  vault_key: "onyxplex_password"

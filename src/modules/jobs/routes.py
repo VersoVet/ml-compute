@@ -6,6 +6,7 @@ from typing import Any
 from fastapi import APIRouter, HTTPException, Query
 
 from src.models import JobResponse, JobSubmitRequest
+from src.modules.gpu_allocator import allocator
 from src.modules.jobs import service
 
 logger = logging.getLogger(__name__)
@@ -46,18 +47,25 @@ async def submit_job(request: JobSubmitRequest) -> JobResponse:
             except Exception as e:
                 logger.debug(f"Failed to signal WORKING status: {e}")
 
-        result = await service.submit_job(
+        result = await allocator.submit_or_queue(
             name=request.name,
             entrypoint=request.entrypoint,
             runtime_env=request.runtime_env,
             submit_kwargs=request.submit_kwargs,
         )
 
+        if result.allocated:
+            return JobResponse(
+                job_id=result.job_id or "",
+                status="SUBMITTED",
+                name=request.name,
+                submission_time=None,
+            )
         return JobResponse(
-            job_id=result["job_id"],
-            status=result["status"],
-            name=result["name"],
-            submission_time=None,
+            job_id=f"queued-{result.queue_id}",
+            status="QUEUED",
+            name=request.name,
+            queue_position=result.queue_position,
         )
     except RuntimeError as e:
         raise HTTPException(status_code=400, detail=str(e))

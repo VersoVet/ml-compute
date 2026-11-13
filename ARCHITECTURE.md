@@ -5,10 +5,10 @@
 **ml-compute** est un **orchestrateur ML centralisé** :
 1. **Compute Backends** — Interface unifiee multi-backend (local Ray, Lightning AI, Kaggle)
 2. **Ray** — Soumission et monitoring de jobs training distribues sur workers GPU/CPU
-3. **Nomad** — Allocation exclusive des GPUs (anti-conflit CUDA entre jobs)
+3. **GPU Allocator** — Allocation exclusive des GPUs via PostgreSQL + file d'attente FIFO (anti-conflit CUDA entre jobs)
 4. **FastAPI** — API unifiee pour les skills metier (bone-ml, bone-annotator, bone-recognition)
-
 5. **GPU Management** — Acquire/release GPU sur OnyxCortex (stop/start SAM+MedSAM2 pour liberer VRAM)
+6. **Ray Serve** — Inference deployments (bone_rotation_app, base_app)
 
 **Hors scope** : SAM/MedSAM inference et CVAT sont geres directement par **bone-annotator** sur OnyxCortex, sans passer par Ray ni ml-compute (voir section "Separation SAM"). Cependant ml-compute gere l'allocation GPU via les endpoints `/api/gpu/*` (arret/relance des containers SAM pour liberer la VRAM avant training).
 
@@ -38,15 +38,18 @@ OnyxTensor (10.0.0.73) — Rig 1 GPU Training (ACTUEL)
 ├── Total: 26 GB VRAM, 3 GPUs
 └── Config Ray: num_gpus=3 (à connecter)
 
-OnyxCortex (10.0.0.26) — GPU Training + SAM (TRANSITOIRE)
-├── Hardware: 16-core i7-10700KF, RTX 4070 SUPER 12GB, 46GB RAM
-├── Config: num_cpus=16, num_gpus=1, shm-size=10GB
-└── Usage: SAM/MedSAM2 + Ray worker (GPU à migrer vers Tensor)
+OnyxCortex (10.0.0.26) — Bone Training Primary (priorité 1)
+├── Hardware: 16-core i7-10700KF, 46GB RAM, Gigabyte Z490M, gros boîtier
+├── GPU 0: RTX 4070 SUPER 12GB (slot PCIe x16)
+├── Config Ray: num_cpus=16, num_gpus=1, shm-size=10GB
+├── Usage: training bone-ml (100% GPU training, SAM/MedSAM2 arrêtés)
+└── Storage local: /data/ml/ (datasets, checkpoints)
 
-OnyxSynth (10.0.0.78) — Rig 2 GPU 0 uniquement
-├── GPU 0: RTX 3080 10GB (PCIE1 x16) — Ray worker (CUDA_VISIBLE_DEVICES=0)
-├── GPU 1-6: 6× RTX 2060 Super — LLM RÉSERVÉ (systemd llm-server, JAMAIS Ray)
-└── Config Ray: num_gpus=1 (GPU 0 seulement)
+OnyxSynth (10.0.0.78) — Rig 2 LLM DÉDIÉ (HORS CLUSTER RAY)
+├── GPU 0: RTX 3080 10GB (PCIE1 x16) — LLM (tensor-split inclut GPU 0)
+├── GPU 1-6: 6× RTX 2060 Super — LLM
+├── Total: 7 GPU, 58 Go VRAM, 100% LLM Qwen3-32B-Q8_0
+└── JAMAIS de Ray worker ici (toutes les GPU sont LLM)
 ⚠️  Glia (10.0.0.8) — RETIRÉE DU CLUSTER (machine hors service)
 ⚠️  OnyxPoint (10.0.0.86) — MACHINE DÉDIÉE GROBID (HORS CLUSTER RAY)
 ```
@@ -87,16 +90,16 @@ Total : 26 Go VRAM, 3 GPUs
 
 **Évolution prévue** : ajouter RTX 4070 Super 12 Go (ex-Cortex) sur riser x1 → 38 Go VRAM.
 
-### Rig 2 — OnyxSynth (10.0.0.78) — LLM Biblio — PSU ?
+### Rig 2 — OnyxSynth (10.0.0.78) — LLM DÉDIÉ — PSU ?
 ```
-PCIE1 x16 : RTX 3080 10 Go       → ISOLÉE (CUDA_VISIBLE_DEVICES exclut GPU 0)
-Riser x1  : RTX 2060 Super 8 Go  ─┐
+PCIE1 x16 : RTX 3080 10 Go       ─┐
+Riser x1  : RTX 2060 Super 8 Go  ─┤
 Riser x1  : RTX 2060 Super 8 Go  ─┤
 Riser x1  : RTX 2060 Super 8 Go  ─┤ LLM Qwen3-32B-Q8_0 via llama.cpp
-Riser x1  : RTX 2060 Super 8 Go  ─┤ tensor-split 8,8,8,8,8,8
-Riser x1  : RTX 2060 Super 8 Go  ─┤ 10.2 tok/s, port 8080
+Riser x1  : RTX 2060 Super 8 Go  ─┤ 7 GPU, tensor-split 10,8,8,8,8,8,8
+Riser x1  : RTX 2060 Super 8 Go  ─┤ port 8080
 Riser x1  : RTX 2060 Super 8 Go  ─┘
-Total : 58 Go VRAM (48 Go LLM + 10 Go isolée)
+Total : 58 Go VRAM (100% LLM, aucun Ray worker)
 ```
 
 **Service** : systemd `llm-server` (auto-start, restart on failure)
@@ -120,30 +123,35 @@ Total : 58 Go VRAM (48 Go LLM + 10 Go isolée)
 
 ---
 
-## Orchestration GPU via Nomad
+## GPU Allocator (PostgreSQL + FIFO queue)
 
 ### Probleme resolu
 **Conflit GPU critique**: Plusieurs jobs GPU (training, inference) lances simultanément sur le meme GPU = CUDA OOM crash.
 
 ### Solution
-**Nomad** gere l'allocation GPU au niveau OS :
-- **Isolation GPU**: Chaque job obtient des GPUs exclusives
-- **Prevention de conflit**: Si un job utilise le GPU, les suivants attendent
-- **Scheduling intelligent**: Nomad choisit le worker optimal
+**gpu_allocator** gere l'allocation GPU en base PostgreSQL :
+- **Slots exclusifs**: Chaque GPU a un slot `gpu_slots` — un seul job actif par GPU
+- **File d'attente FIFO**: Jobs en attente dans `gpu_job_queue`, traites dans l'ordre
+- **Background worker**: Sync Ray status toutes les 10s, detecte les zombies, auto-release les jobs termines
+- **Pas de conflit CUDA**: Si GPU occupee, le job est mis en file (status QUEUED) au lieu d'etre soumis directement a Ray
 
-### Architecture Nomad
+### Architecture GPU Allocator
 ```
-OnyxSoma (10.0.0.44) — Nomad Server
-├── HTTP API (:4646)
-├── Job scheduler
-└── GPU allocation tracking
+OnyxSoma (10.0.0.44) — ml-compute API
+├── gpu_allocator module
+│   ├── db.py           — connexion PostgreSQL, tables gpu_slots + gpu_job_queue
+│   ├── state.py        — lecture/ecriture etat slots (acquire, release, query)
+│   ├── allocator.py    — logique allocation : tente slot libre, sinon enqueue
+│   ├── queue_worker.py — background worker (10s loop, detect zombies, dispatch queue)
+│   ├── models.py       — Pydantic: GPUSlot, QueuedJob, AllocatorStatus
+│   └── routes.py       — Endpoints /api/gpu-allocator/*
 
-Workers Nomad Clients (actuel)
-├── OnyxCortex (10.0.0.26) — 1 GPU RTX 4070 SUPER (transitoire)
-└── OnyxTensor (10.0.0.73) — 3 GPU (3080 + 4060 + 2060S) — à connecter
+Workers Ray (executent les jobs)
+├── OnyxCortex (10.0.0.26) — 1 GPU RTX 4070S 12 Go (priorité 1 — bone training)
+└── OnyxTensor (10.0.0.73) — 3 GPU (3080 + 4060 + 2060S) (priorité 2 — overflow)
 
-Worker hors Nomad
-└── OnyxSynth (10.0.0.78) — 7 GPU, LLM dédié (pas de training)
+Machine hors cluster (LLM dédié)
+└── OnyxSynth (10.0.0.78) — 7 GPU, 100% LLM Qwen3-32B (JAMAIS de Ray worker ici)
 ```
 
 ---
@@ -203,13 +211,15 @@ Registre des modeles ML disponibles sur le filesystem.
 - `routes.py`: GET /api/models
 - Tests: 5 tests unitaires
 
-### 5. **nomad** (`src/modules/nomad/`)
-Orchestration GPU via Nomad. Allocation exclusive, prevention conflits CUDA.
+### 5. **gpu_allocator** (`src/modules/gpu_allocator/`)
+GPU allocator with PostgreSQL-backed exclusive assignment and FIFO job queue. Prevents CUDA conflicts by ensuring one job per GPU. Background worker syncs Ray status every 10s, detects zombies, auto-releases finished jobs.
 
-- `service.py`: NomadManager (submit_job, get_status, gpu_status)
-- `models.py`: NomadJobRequest, NomadJobStatus, GPUStatus, NomadClusterStatus
-- `routes.py`: Endpoints /api/nomad/*
-- `utils.py`: build_job_spec, count_gpus
+- `db.py`: connexion PostgreSQL, tables gpu_slots + gpu_job_queue
+- `state.py`: lecture/ecriture etat slots (acquire, release, query)
+- `allocator.py`: logique allocation — tente slot libre, sinon enqueue dans FIFO
+- `queue_worker.py`: background worker asyncio — sync Ray toutes les 10s, detecte zombies, dispatch queue
+- `models.py`: Pydantic: GPUSlot, QueuedJob, AllocatorStatus, AllocatorSummary
+- `routes.py`: Endpoints /api/gpu-allocator/*
 
 ### 6. **compute_backends** (`src/modules/compute_backends/`)
 Interface unifiee multi-backend pour soumettre des jobs ML sur differentes plateformes.
@@ -233,7 +243,18 @@ skill client → POST /api/compute/submit → BackendManager
                                             └── kaggle: kernels push → T4 GPU
 ```
 
-### 7. **gpu** (`src/modules/gpu/`)
+### 7. **serving** (`src/serving/`)
+Applications Ray Serve pour l'inference (deployees sur Ray Head OnyxSoma).
+
+- `base_app.py`: Application Ray Serve de base — health, version, routing
+- `bone_rotation_app.py`: Application d'inference bone rotation — charge modele PyTorch, expose predict endpoint
+
+**Acces inference** :
+```
+POST /api/serve/predict/{app_name}  → Ray Serve → GPU OnyxCortex ou Tensor
+```
+
+### 8. **gpu** (`src/modules/gpu/`)
 Gestion de l'allocation GPU multi-cible. Arret/relance de services GPU pour liberer la VRAM avant training.
 
 - `service.py`: get_gpu_status, acquire_gpu, release_gpu (via Docker API TCP)
@@ -250,10 +271,9 @@ Gestion de l'allocation GPU multi-cible. Arret/relance de services GPU pour libe
 |--------|---------|------|-------------|----------------|-------|
 | `cortex` | OnyxCortex .26 | RTX 4070S 12Go | inference (SAM) | SAM+MedSAM2 | training bone-ml |
 | `tensor` | OnyxTensor .73 | 3080+4060+2060S 26Go | training | rien | training multi-GPU |
-| `synth` | OnyxSynth .78 GPU 0 | RTX 3080 10Go | Ray worker | rien | training overflow |
 
-**Note** : OnyxSynth GPU 1-6 (6×2060S) sont **exclusivement réservées au LLM** (systemd llm-server).
-Ne JAMAIS soumettre de jobs Ray sur ces GPU. GPU 0 (RTX 3080) est connectée à Ray (CUDA_VISIBLE_DEVICES=0).
+**Note** : OnyxSynth (10.0.0.78) est **100% dédié au LLM** (7 GPU, systemd llm-server).
+Ne JAMAIS soumettre de jobs Ray sur cette machine.
 
 **Workflow training sur Tensor** :
 ```
@@ -329,16 +349,21 @@ ml-compute/
 │   ├── config.py               # Chargement config/ml-compute.yaml
 │   ├── main.py                 # FastAPI app (~279 lignes)
 │   ├── models.py               # Modeles Pydantic
+│   ├── serving/                # Ray Serve applications (inference)
+│   │   ├── base_app.py         # Application de base Ray Serve
+│   │   └── bone_rotation_app.py# Inference bone rotation
 │   └── modules/
 │       ├── jobs/               # Ray Jobs API proxy
 │       ├── nodes/              # Worker monitoring
 │       ├── serve/              # Ray Serve management
 │       ├── models/             # Model registry
-│       ├── nomad/              # Nomad GPU orchestration
-│       │   ├── service.py
-│       │   ├── models.py
-│       │   ├── routes.py
-│       │   └── utils.py
+│       ├── gpu_allocator/      # GPU exclusive allocation + FIFO queue
+│       │   ├── db.py           # PostgreSQL connexion, tables
+│       │   ├── state.py        # Lecture/ecriture etat slots
+│       │   ├── allocator.py    # Logique allocation (slot libre ou enqueue)
+│       │   ├── queue_worker.py # Background worker (10s sync, zombie detect)
+│       │   ├── models.py       # GPUSlot, QueuedJob, AllocatorStatus
+│       │   └── routes.py       # /api/gpu-allocator/*
 │       ├── compute_backends/   # Multi-backend job submission
 │       │   ├── service.py     # BackendManager
 │       │   ├── models.py      # Pydantic models

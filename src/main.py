@@ -26,11 +26,12 @@ from src.models import (
 from src.modules.compute_backends import routes as compute_routes
 from src.modules.compute_backends.service import BackendManager
 from src.modules.gpu import routes as gpu_routes
+from src.modules.gpu_allocator import db as gpu_db
+from src.modules.gpu_allocator import routes as allocator_routes
+from src.modules.gpu_allocator.queue_worker import start_worker, stop_worker
 from src.modules.jobs import routes as jobs_routes
 from src.modules.models import routes as models_routes
 from src.modules.nodes import routes as nodes_routes
-from src.modules.nomad import routes as nomad_routes
-from src.modules.nomad.service import NomadManager
 from src.modules.serve import routes as serve_routes
 
 logger = logging.getLogger("ml-compute")
@@ -91,7 +92,6 @@ class RayClient:
 
 # Global clients
 ray_client = RayClient()
-nomad_manager = NomadManager()
 backend_manager = BackendManager()
 onyx: OnyxClient | None = None
 
@@ -107,7 +107,14 @@ async def lifespan(app: FastAPI):
 
     # Startup
     await ray_client.connect()
-    await nomad_manager.connect()
+
+    # GPU allocator (PostgreSQL state + background worker)
+    try:
+        await gpu_db.ensure_schema()
+        await start_worker()
+        logger.info("GPU allocator started")
+    except Exception as e:
+        logger.error(f"GPU allocator init failed (jobs will bypass allocator): {e}")
 
     # Initialize OnyxClient (optional - non-blocking)
     try:
@@ -119,13 +126,14 @@ async def lifespan(app: FastAPI):
         logger.debug(f"OnyxClient initialization (optional): {e}")
         onyx = None
 
-    # Set managers in routes
-    nomad_routes.set_nomad_manager(nomad_manager)
     compute_routes.set_backend_manager(backend_manager)
 
     yield
 
     # Shutdown
+    await stop_worker()
+    await gpu_db.close_pool()
+
     if onyx:
         try:
             onyx.stop()
@@ -133,7 +141,6 @@ async def lifespan(app: FastAPI):
         except Exception as e:
             logger.debug(f"OnyxClient shutdown (optional): {e}")
 
-    await nomad_manager.disconnect()
     await ray_client.disconnect()
 
 
@@ -148,11 +155,11 @@ app = FastAPI(
 # Include routers
 app.include_router(jobs_routes.router, prefix="/api/jobs", tags=["jobs"])
 app.include_router(nodes_routes.router, prefix="/api/nodes", tags=["nodes"])
-app.include_router(nomad_routes.router, prefix="/api/nomad", tags=["nomad"])
 app.include_router(serve_routes.router, prefix="/api/serve", tags=["serve"])
 app.include_router(models_routes.router, prefix="/api/models", tags=["models"])
 app.include_router(compute_routes.router, prefix="/api", tags=["compute"])
 app.include_router(gpu_routes.router, prefix="/api/gpu", tags=["gpu"])
+app.include_router(allocator_routes.router, prefix="/api/gpu-allocator", tags=["gpu-allocator"])
 
 
 @app.get("/health", response_model=HealthResponse, tags=["status"])

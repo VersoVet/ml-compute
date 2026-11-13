@@ -2,13 +2,12 @@
 
 **Base URL** : `http://10.0.0.44:9469`
 
-**Scope** : Orchestration training ML (Ray + Nomad) sur le cluster GPU Onyx.
+**Scope** : Orchestration training ML (Ray + GPU Allocator) sur le cluster GPU Onyx.
 
 **Cluster GPU** :
-- **OnyxTensor** (10.0.0.73) — 3 GPU (3080+4060+2060S, 26 Go) — training
-- **OnyxSynth** (10.0.0.78) GPU 0 — 1× 3080 (10 Go) — training overflow
-- **OnyxCortex** (10.0.0.26) — 1× 4070S (12 Go) — training + SAM (transitoire)
-- **OnyxSynth** GPU 1-6 — 6× 2060S (48 Go) — **LLM Qwen3-32B-Q8_0** (hors Ray, port 8080)
+- **OnyxCortex** (10.0.0.26) — RTX 4070S (12 Go) — **bone training primary** (priorité 1, SAM arrêtés, GPU 100% training)
+- **OnyxTensor** (10.0.0.73) — 3 GPU (3080+4060+2060S, 26 Go) — training overflow (priorité 2)
+- **OnyxSynth** (10.0.0.78) — 7 GPU (58 Go) — **LLM Qwen3-32B-Q8_0 DÉDIÉ** (hors Ray, port 8080)
 
 SAM/MedSAM est gere par bone-annotator (voir bone-annotator/API.md).
 
@@ -49,7 +48,7 @@ curl http://10.0.0.44:9469/ready
 ## Jobs API
 
 ### POST /api/jobs
-Soumet un job Ray pour training.
+Soumet un job Ray pour training. Passe par le **GPU Allocator** : si un GPU est libre, le job est soumis a Ray directement (SUBMITTED) ; sinon il est mis en file d'attente FIFO (QUEUED) et dispatche automatiquement quand un slot se libere.
 
 ```bash
 curl -X POST http://10.0.0.44:9469/api/jobs \
@@ -68,12 +67,23 @@ curl -X POST http://10.0.0.44:9469/api/jobs \
   }'
 ```
 
-**Response** (202 Accepted):
+**Response** (202 Accepted — GPU libre, job soumis a Ray):
 ```json
 {
   "job_id": "raysubmit_abc123",
   "status": "SUBMITTED",
   "name": "yolo-training-001"
+}
+```
+
+**Response** (202 Accepted — GPU occupee, job en file):
+```json
+{
+  "job_id": null,
+  "queue_id": "queue_xyz789",
+  "status": "QUEUED",
+  "name": "yolo-training-001",
+  "queue_position": 2
 }
 ```
 
@@ -147,82 +157,86 @@ curl http://10.0.0.44:9469/api/nodes/summary
 
 ---
 
-## Nomad Orchestration API
+## GPU Allocator API
 
-### GET /api/nomad/status
-Statut global du cluster Nomad (nodes, GPUs, jobs).
+Allocation exclusive des GPUs avec file d'attente FIFO. Garantit qu'un seul job s'execute par GPU (prevention conflits CUDA). Le background worker detecte les zombies et auto-release les jobs termines.
+
+### GET /api/gpu-allocator/status
+Etat complet de tous les slots GPU, file d'attente, et resume.
 
 ```bash
-curl http://10.0.0.44:9469/api/nomad/status
+curl http://10.0.0.44:9469/api/gpu-allocator/status
 ```
 
 **Response**:
 ```json
 {
-  "nodes_ready": 3,
-  "nodes_total": 3,
-  "gpus_total": 2,
-  "gpus_available": 2,
-  "jobs_running": 0,
-  "jobs_pending": 0
+  "slots": [
+    {
+      "gpu_id": "cortex-0",
+      "node": "OnyxCortex",
+      "gpu_name": "RTX 4070 SUPER 12Go",
+      "status": "busy",
+      "current_job_id": "raysubmit_abc123",
+      "acquired_at": "2026-11-05T10:00:00Z"
+    },
+    {
+      "gpu_id": "tensor-0",
+      "node": "OnyxTensor",
+      "gpu_name": "RTX 3080 10Go",
+      "status": "free",
+      "current_job_id": null,
+      "acquired_at": null
+    }
+  ],
+  "queue": [
+    {
+      "queue_id": "queue_xyz789",
+      "job_name": "yolo-training-002",
+      "queued_at": "2026-11-05T10:05:00Z",
+      "position": 1,
+      "num_gpus": 1
+    }
+  ],
+  "summary": {
+    "slots_total": 4,
+    "slots_free": 3,
+    "slots_busy": 1,
+    "queue_depth": 1
+  }
 }
 ```
 
-### POST /api/nomad/jobs/submit
-Soumet un job a Nomad avec reservation GPU exclusive.
+### POST /api/gpu-allocator/release/{job_id}
+Liberation manuelle d'un slot (escape hatch si le job est zombie et non detecte automatiquement).
 
 ```bash
-curl -X POST http://10.0.0.44:9469/api/nomad/jobs/submit \
-  -H "Content-Type: application/json" \
-  -d '{
-    "name": "bone-ml-training-001",
-    "job_type": "batch",
-    "driver": "docker",
-    "image": "rayproject/ray:2.35.0-py312",
-    "command": "python /app/train_multitask.py",
-    "constraints": [{"task_name": "training", "cpu_mhz": 8000, "memory_mb": 16384, "num_gpus": 1}],
-    "env_vars": {"EPOCHS": "100", "BATCH_SIZE": "32"},
-    "timeout_seconds": 7200
-  }'
-```
-
-**Response** (202):
-```json
-{
-  "status": "submitted",
-  "job_id": "bone-ml-training-001",
-  "evaluation_id": "c0e1bdd3-..."
-}
-```
-
-### GET /api/nomad/jobs/{job_id}
-Statut et allocations d'un job Nomad.
-
-```bash
-curl http://10.0.0.44:9469/api/nomad/jobs/{job_id}
-```
-
-### POST /api/nomad/jobs/{job_id}/stop
-Arrete un job en cours.
-
-```bash
-curl -X POST http://10.0.0.44:9469/api/nomad/jobs/{job_id}/stop
-```
-
-### GET /api/nomad/gpu-status
-Etat des GPUs par noeud.
-
-```bash
-curl http://10.0.0.44:9469/api/nomad/gpu-status
+curl -X POST http://10.0.0.44:9469/api/gpu-allocator/release/raysubmit_abc123
 ```
 
 **Response**:
 ```json
-[
-  {"node_name": "onyxcortex", "num_gpus": 1, "available_gpus": 0, "in_use": ["bone-ml-001"]},
-  {"node_name": "OnyxPoint", "num_gpus": 1, "available_gpus": 1, "in_use": []},
-  {"node_name": "onyxglia", "num_gpus": 0, "available_gpus": 0, "in_use": []}
-]
+{
+  "success": true,
+  "gpu_id": "cortex-0",
+  "message": "Slot cortex-0 released for job raysubmit_abc123"
+}
+```
+
+### DELETE /api/gpu-allocator/queue/{queue_id}
+Annule un job en attente dans la file FIFO.
+
+```bash
+curl -X DELETE http://10.0.0.44:9469/api/gpu-allocator/queue/queue_xyz789
+```
+
+**Response**:
+```json
+{
+  "success": true,
+  "queue_id": "queue_xyz789",
+  "message": "Queued job queue_xyz789 cancelled"
+}
 ```
 
 ---
@@ -255,6 +269,42 @@ Retire une application Ray Serve.
 curl -X POST http://10.0.0.44:9469/api/serve/undeploy \
   -H "Content-Type: application/json" \
   -d '{"name": "yolo-bones"}'
+```
+
+### POST /api/serve/predict/{app_name}
+Envoie une requete d'inference a une application Ray Serve deployee.
+
+```bash
+curl -X POST http://10.0.0.44:9469/api/serve/predict/bone_rotation_app \
+  -H "Content-Type: application/json" \
+  -d '{"image_path": "/mnt/bonestore/frame_001.png", "options": {}}'
+```
+
+**Response**:
+```json
+{
+  "app_name": "bone_rotation_app",
+  "result": {"rotation_degrees": 12.4, "confidence": 0.91},
+  "duration_ms": 143.2
+}
+```
+
+### GET /api/serve/deployments/{name}/status
+Statut detaille d'une application Ray Serve.
+
+```bash
+curl http://10.0.0.44:9469/api/serve/deployments/bone_rotation_app/status
+```
+
+**Response**:
+```json
+{
+  "name": "bone_rotation_app",
+  "status": "RUNNING",
+  "num_replicas": 1,
+  "num_gpus_per_replica": 1,
+  "last_deployed": "2026-11-05T09:00:00Z"
+}
 ```
 
 ---
@@ -527,9 +577,9 @@ curl http://10.0.0.26:9470/health
 Gestion de l'allocation GPU multi-cible. Permet de coordonner les GPU entre training et services d'inference.
 
 **Targets actuelles** :
-- `cortex` (defaut) — OnyxCortex RTX 4070S 12 Go — stop/start SAM+MedSAM2
+- `cortex` (defaut) — OnyxCortex RTX 4070S 12 Go — stop/start SAM+MedSAM2 pour training
 - `tensor` — OnyxTensor 3× GPU (3080+4060+2060S) 26 Go — training dedié
-- `synth` — OnyxSynth GPU 0 (RTX 3080 10 Go) — training overflow (GPU 1-6 = LLM reservé)
+- ~~`synth`~~ — **RETIRÉ** : OnyxSynth 7 GPU = 100% LLM Qwen3-32B (JAMAIS de training)
 
 ### GET /api/gpu/status
 Etat actuel du GPU et des containers d'inference.
@@ -592,6 +642,16 @@ curl -X POST http://10.0.0.44:9469/api/gpu/release
 ---
 
 ## Updates
+
+### [v0.4.0] 2026-11-05
+- Module gpu_allocator : allocation exclusive GPU PostgreSQL + file d'attente FIFO
+- Endpoints /api/gpu-allocator/status, /release/{job_id}, /queue/{queue_id}
+- POST /api/jobs route desormais via gpu_allocator (retourne SUBMITTED ou QUEUED)
+- Suppression module Nomad et endpoints /api/nomad/*
+- Module serving : Ray Serve apps (base_app, bone_rotation_app)
+- Nouveaux endpoints /api/serve/predict/{app_name} et /api/serve/deployments/{name}/status
+- OnyxCortex passe en bone training primary (priorité 1, SAM arrêtés, 100% GPU training)
+- OnyxTensor = overflow training (priorité 2)
 
 ### [v0.3.3] 2026-11-01
 - Infrastructure GPU rigs : OnyxTensor (3 GPU, 26 Go) + OnyxSynth (7 GPU, 58 Go)

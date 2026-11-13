@@ -42,12 +42,12 @@ graph TB
     subgraph Soma["OnyxSoma (10.0.0.44) — Orchestration"]
         API["ml-compute API<br/>:9469"]
         RayHead["Ray Head<br/>:6380 GCS<br/>:8265 Dashboard"]
-        NomadServer["Nomad Server<br/>:4646<br/>GPU Allocation"]
+        GPUAlloc["gpu_allocator<br/>PostgreSQL slots<br/>FIFO queue"]
         API --- RayHead
-        API --- NomadServer
+        API --- GPUAlloc
     end
 
-    subgraph Tensor["OnyxTensor (10.0.0.73) — Rig 1 Training"]
+    subgraph Tensor["OnyxTensor (10.0.0.73) — Rig 1 Training (priorité 2)"]
         T_3080["GPU 0: RTX 3080 10Go<br/>PCIE1 x16"]
         T_4060["GPU 1: RTX 4060 8Go<br/>riser x1"]
         T_2060["GPU 2: RTX 2060S 8Go<br/>riser x1"]
@@ -58,14 +58,15 @@ graph TB
         S_LLM["GPU 1-6: 6x RTX 2060S<br/>Qwen3-32B-Q8_0<br/>llama.cpp :8080"]
     end
 
-    subgraph Cortex["OnyxCortex (10.0.0.26) — Transitoire"]
-        C_4070["RTX 4070S 12Go<br/>SAM + Ray worker"]
+    subgraph Cortex["OnyxCortex (10.0.0.26) — Bone Training Primary (priorité 1)"]
+        C_4070["RTX 4070S 12Go<br/>100% training<br/>/data/ml/"]
     end
 
     RayHead -->|ray worker| Tensor
     RayHead -->|ray worker GPU 0| S_3080
     RayHead -->|ray worker| Cortex
-    NomadServer -->|GPU alloc| Tensor
+    GPUAlloc -->|slot exclusif| Cortex
+    GPUAlloc -->|slot exclusif| Tensor
 
     subgraph Storage["NFS Storage"]
         MLStore["/mnt/ml-store"]
@@ -128,7 +129,7 @@ sequenceDiagram
 ```mermaid
 graph LR
     subgraph mlcompute["ml-compute (OnyxSoma)"]
-        TrainingAPI["Training API :9469<br/>Jobs, Nodes, Nomad"]
+        TrainingAPI["Training API :9469<br/>Jobs, Nodes, GPU Allocator"]
     end
 
     subgraph boneannotator["bone-annotator (OnyxSynapse)"]
@@ -170,28 +171,63 @@ retourner `{blob, shape}` (image `sam-inference`, gere par bone-annotator).
 sequenceDiagram
     actor Client as bone-ml / bone-annotator
     participant API as ml-compute :9469
-    participant Nomad as Nomad :4646
+    participant Alloc as gpu_allocator<br/>PostgreSQL
+    participant Queue as FIFO queue<br/>gpu_job_queue
     participant Ray as Ray Head :6380
-    participant Worker as OnyxCortex GPU
+    participant Worker as OnyxCortex (p1) / Tensor (p2)
 
     Client->>API: POST /api/jobs
-    API->>Nomad: GET /gpu-status
-    Note over Nomad: GPU libre ?
+    API->>Alloc: tenter slot libre (priorité 1 → Cortex, 2 → Tensor)
+    Note over Alloc: GPU libre ?
 
-    alt GPU occupee
-        API-->>Client: 200 (job queued, GPU busy)
+    alt GPU occupee (tous les slots busy)
+        Alloc->>Queue: enqueue job (FIFO)
+        API-->>Client: 202 QUEUED (queue_id, position)
+        Note over Queue: background worker poll 10s
+        Queue->>Alloc: slot libéré → dispatch
+        Alloc->>Ray: submit_job()
     else GPU libre
+        Alloc->>Alloc: acquire slot (atomic)
         API->>Ray: submit_job()
         Ray->>Worker: Schedule on GPU
         Worker->>Worker: Execute training
         Ray-->>API: job_id
-        API-->>Client: 202 Accepted
+        API-->>Client: 202 SUBMITTED (job_id)
     end
+
+    Worker-->>Ray: SUCCEEDED / FAILED
+    Ray-->>Alloc: background worker detecte fin
+    Alloc->>Alloc: release slot → dispatch queue suivant
 
     Client->>API: GET /api/jobs/{id}
     API->>Ray: query status + logs
     Ray-->>API: status, logs
     API-->>Client: 200 OK
+```
+
+## Ray Serve Inference Flow
+
+```mermaid
+sequenceDiagram
+    actor Client as skill client
+    participant API as ml-compute :9469
+    participant Serve as Ray Serve :8000
+    participant App as bone_rotation_app / base_app
+    participant GPU as OnyxCortex GPU
+
+    Client->>API: POST /api/serve/predict/{app_name}
+    API->>Serve: forward request
+    Serve->>App: route to replica
+    App->>GPU: inference (PyTorch)
+    GPU-->>App: result tensor
+    App-->>Serve: prediction + confidence
+    Serve-->>API: response
+    API-->>Client: 200 {result, duration_ms}
+
+    Client->>API: GET /api/serve/deployments/{name}/status
+    API->>Serve: GET /api/applications
+    Serve-->>API: status, replicas, GPU
+    API-->>Client: 200 {status, num_replicas}
 ```
 
 ## Module Interactions
@@ -205,27 +241,31 @@ graph LR
         Nodes["nodes/<br/>Worker monitoring"]
         Serve["serve/<br/>Ray Serve mgmt"]
         Models["models/<br/>Model registry"]
-        Nomad["nomad/<br/>GPU orchestration"]
+        GPUAlloc["gpu_allocator/<br/>PostgreSQL slots + FIFO queue"]
         GPU["gpu/<br/>acquire / release multi-cible"]
+        Serving["serving/<br/>Ray Serve apps (inference)"]
     end
 
     Main -->|/api/jobs| Jobs
     Main -->|/api/nodes| Nodes
     Main -->|/api/serve| Serve
     Main -->|/api/models| Models
-    Main -->|/api/nomad| Nomad
+    Main -->|/api/gpu-allocator| GPUAlloc
     Main -->|/api/gpu| GPU
+    Main -->|/api/serve/predict| Serving
 
     RayDash["Ray Dashboard :8265"]
-    NomadAPI["Nomad API :4646"]
+    PG["PostgreSQL<br/>gpu_slots, gpu_job_queue"]
 
     Jobs -->|httpx| RayDash
     Nodes -->|httpx| RayDash
     Serve -->|httpx| RayDash
-    Nomad -->|httpx| NomadAPI
+    Serving -->|Ray Serve SDK| RayDash
+    GPUAlloc -->|asyncpg| PG
+    Jobs -->|via allocator| GPUAlloc
     GPU -->|Docker API| CortexDocker["OnyxCortex :2375<br/>SAM + MedSAM2"]
 
     Config["config.py<br/>ml-compute.yaml"]
-    Nomad --- Config
+    GPUAlloc --- Config
     Main --- Config
 ```

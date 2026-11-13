@@ -12,7 +12,7 @@ services:
       RAY_object_store_memory: 1000000000
     command: bash -c "ray start --head --num-cpus=0 --port=6380 --dashboard-host=0.0.0.0 --dashboard-port=8265 --ray-debugger-external && sleep infinity"
     volumes:
-      - /tmp/ray:/tmp/ray
+      - /opt/onyx/tmp/ray:/tmp/ray
       - /mnt/bonestore:/mnt/bonestore:ro
       - /mnt/ml-store:/mnt/ml-store:rw
     healthcheck:
