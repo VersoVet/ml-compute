@@ -97,13 +97,17 @@ curl http://10.0.0.44:9469/api/jobs?status=RUNNING
 ```
 
 ### GET /api/jobs/{job_id}
-Statut detaille et logs d'un job.
+Statut detaille et logs d'un job. Supporte les IDs `queued-{N}` retournes par l'allocator : resout automatiquement vers le vrai `ray_job_id` une fois le job dispatche.
 
 ```bash
-curl http://10.0.0.44:9469/api/jobs/{job_id}
+# Job Ray standard
+curl http://10.0.0.44:9469/api/jobs/raysubmit_abc123
+
+# Job en queue (resout vers le vrai ray_job_id quand dispatche)
+curl http://10.0.0.44:9469/api/jobs/queued-1
 ```
 
-**Response**:
+**Response** (job Ray):
 ```json
 {
   "job_id": "raysubmit_abc123",

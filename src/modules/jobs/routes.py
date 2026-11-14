@@ -103,10 +103,12 @@ async def list_jobs(
 
 @router.get("/{job_id}", response_model=JobResponse, tags=["jobs"])
 async def get_job_status(job_id: str) -> JobResponse:
-    """Get detailed status and logs for a specific job.
+    """Get status for a job (Ray job or queued job).
+
+    Handles both real Ray job IDs and queued-X IDs from the GPU allocator.
 
     Args:
-        job_id: Ray job ID.
+        job_id: Ray job ID or queued-{queue_id}.
 
     Returns:
         JobResponse with status and logs.
@@ -114,6 +116,25 @@ async def get_job_status(job_id: str) -> JobResponse:
     Raises:
         HTTPException: If job not found.
     """
+    # Handle queued-X IDs from the GPU allocator
+    if job_id.startswith("queued-"):
+        try:
+            queue_id = int(job_id.split("-", 1)[1])
+        except (ValueError, IndexError):
+            raise HTTPException(status_code=400, detail=f"Invalid queued job ID: {job_id}")
+
+        info = await allocator.resolve_queued_job(queue_id)
+        status = info.get("status", "UNKNOWN")
+        real_job_id = info.get("ray_job_id", job_id)
+
+        return JobResponse(
+            job_id=real_job_id if real_job_id != job_id else job_id,
+            status=status,
+            name=info.get("name", f"queued-{queue_id}"),
+            queue_position=info.get("queue_position"),
+        )
+
+    # Regular Ray job ID
     try:
         result = await service.get_job_status(job_id)
 

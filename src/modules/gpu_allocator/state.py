@@ -185,11 +185,7 @@ async def dequeue_next() -> QueuedJob | None:
 
 
 async def cancel_queued(queue_id: int) -> bool:
-    """Cancel a queued job.
-
-    Returns:
-        True if cancelled, False if not found or already submitted.
-    """
+    """Cancel a queued job. Returns True if cancelled."""
     pool = await get_pool()
     async with pool.acquire() as conn:
         result = await conn.execute(
@@ -234,6 +230,61 @@ async def get_queue() -> list[QueuedJob]:
             "SELECT * FROM ml_compute.job_queue WHERE status = 'queued' ORDER BY queued_at",
         )
     return [_row_to_queued(r) for r in rows]
+
+
+async def peek_queue() -> QueuedJob | None:
+    """Peek at the next queued job without dequeuing it."""
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow(
+            """SELECT * FROM ml_compute.job_queue
+               WHERE status = 'queued'
+               ORDER BY queued_at
+               LIMIT 1""",
+        )
+    return _row_to_queued(row) if row else None
+
+
+async def requeue_job(queue_id: int) -> None:
+    """Re-queue a job that failed to dispatch."""
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        await conn.execute(
+            "UPDATE ml_compute.job_queue SET status = 'queued' WHERE queue_id = $1",
+            queue_id,
+        )
+    logger.warning("Job queue_id=%d re-queued after dispatch failure", queue_id)
+
+
+async def set_queue_ray_job_id(queue_id: int, ray_job_id: str) -> None:
+    """Store the real Ray job ID after a queued job is dispatched."""
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        await conn.execute(
+            "UPDATE ml_compute.job_queue SET ray_job_id = $1 WHERE queue_id = $2",
+            ray_job_id,
+            queue_id,
+        )
+    logger.info("Queue %d → ray_job_id=%s", queue_id, ray_job_id)
+
+
+async def get_queue_entry(queue_id: int) -> dict[str, Any] | None:
+    """Get a queue entry by ID (any status)."""
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow(
+            "SELECT * FROM ml_compute.job_queue WHERE queue_id = $1",
+            queue_id,
+        )
+    if row is None:
+        return None
+    return {
+        "queue_id": row["queue_id"],
+        "name": row["name"],
+        "status": row["status"],
+        "ray_job_id": row.get("ray_job_id"),
+        "queued_at": row["queued_at"],
+    }
 
 
 async def get_assigned_slots() -> list[GPUSlot]:

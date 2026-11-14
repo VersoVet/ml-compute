@@ -47,11 +47,18 @@ CREATE TABLE IF NOT EXISTS ml_compute.job_queue (
     submit_kwargs   JSONB NOT NULL DEFAULT '{}',
     queued_at       TIMESTAMPTZ DEFAULT NOW(),
     status          TEXT NOT NULL DEFAULT 'queued'
-                    CHECK (status IN ('queued', 'submitted', 'cancelled'))
+                    CHECK (status IN ('queued', 'submitted', 'cancelled')),
+    ray_job_id      TEXT
 );
 
 CREATE INDEX IF NOT EXISTS idx_queue_status
     ON ml_compute.job_queue (status, queued_at);
+
+-- Migration: add ray_job_id column if table already exists without it
+DO $$ BEGIN
+    ALTER TABLE ml_compute.job_queue ADD COLUMN IF NOT EXISTS ray_job_id TEXT;
+EXCEPTION WHEN duplicate_column THEN NULL;
+END $$;
 """
 
 

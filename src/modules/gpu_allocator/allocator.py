@@ -22,11 +22,6 @@ async def submit_or_queue(
 ) -> AllocationResult:
     """Submit a job to Ray if a GPU is free, otherwise queue it.
 
-    Routing logic:
-    - Jobs with 'bone' in name → prefer Cortex (bone_training label, priority 1)
-    - Other jobs → prefer Tensor
-    - Fallback to any free GPU regardless of preference
-
     Args:
         name: Job name.
         entrypoint: Command to run.
@@ -39,7 +34,6 @@ async def submit_or_queue(
     runtime_env = runtime_env or {}
     submit_kwargs = submit_kwargs or {}
 
-    # Bone jobs prefer Cortex (priority 1), others prefer Tensor
     prefer_cortex = "bone" in name.lower()
     gpu = await state.get_free_gpu(prefer_cortex=prefer_cortex)
 
@@ -100,18 +94,27 @@ async def release_job(job_id: str) -> str | None:
 async def drain_queue() -> int:
     """Submit queued jobs while GPUs are available.
 
+    FIX: check GPU FIRST, then dequeue — avoids losing jobs if no GPU free.
+    Stores ray_job_id mapping so clients can resolve queued-X → real job.
+
     Returns:
         Number of jobs submitted from queue.
     """
     submitted = 0
     while True:
-        job = await state.dequeue_next()
-        if job is None:
+        # Check GPU availability BEFORE dequeuing to avoid losing jobs
+        peek = await state.peek_queue()
+        if peek is None:
             break
 
-        prefer_cortex = "bone" in job.name.lower()
+        prefer_cortex = "bone" in peek.name.lower()
         gpu = await state.get_free_gpu(prefer_cortex=prefer_cortex)
         if gpu is None:
+            break
+
+        # Now safe to dequeue — we know a GPU is available
+        job = await state.dequeue_next()
+        if job is None:
             break
 
         try:
@@ -121,13 +124,56 @@ async def drain_queue() -> int:
                 runtime_env=job.runtime_env,
                 submit_kwargs=job.submit_kwargs,
             )
-            await state.assign_gpu(gpu.gpu_id, result["job_id"])
-            logger.info("Queue drain: '%s' → GPU %s, ray_job=%s", job.name, gpu.gpu_id, result["job_id"])
+            ray_job_id = result["job_id"]
+            await state.assign_gpu(gpu.gpu_id, ray_job_id)
+            await state.set_queue_ray_job_id(job.queue_id, ray_job_id)
+            logger.info(
+                "Queue drain: '%s' (queue_id=%d) → GPU %s, ray_job=%s",
+                job.name,
+                job.queue_id,
+                gpu.gpu_id,
+                ray_job_id,
+            )
             submitted += 1
         except Exception as e:
             logger.error("Queue drain failed for '%s': %s", job.name, e)
+            # Re-queue the job so it's not lost
+            await state.requeue_job(job.queue_id)
             break
     return submitted
+
+
+async def resolve_queued_job(queue_id: int) -> dict[str, Any]:
+    """Resolve a queued-X job ID to its current status.
+
+    Args:
+        queue_id: Queue entry ID (from "queued-123").
+
+    Returns:
+        Dict with status and ray_job_id (if dispatched).
+    """
+    info = await state.get_queue_entry(queue_id)
+    if info is None:
+        return {"status": "NOT_FOUND", "queue_id": queue_id}
+
+    if info.get("ray_job_id"):
+        # Job was dispatched — return the real Ray job status
+        try:
+            result = await jobs_service.get_job_status(info["ray_job_id"])
+            return {
+                "status": result.get("status", "UNKNOWN"),
+                "queue_id": queue_id,
+                "ray_job_id": info["ray_job_id"],
+                "logs_tail": result.get("logs_tail", ""),
+            }
+        except RuntimeError:
+            return {"status": "DISPATCHED", "queue_id": queue_id, "ray_job_id": info["ray_job_id"]}
+
+    if info["status"] == "queued":
+        position = await state.get_queue_position(queue_id)
+        return {"status": "QUEUED", "queue_id": queue_id, "queue_position": position}
+
+    return {"status": info["status"].upper(), "queue_id": queue_id}
 
 
 async def get_cluster_status() -> dict[str, Any]:
