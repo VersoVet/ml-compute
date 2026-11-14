@@ -36,9 +36,9 @@ async def sync_ray_status() -> list[str]:
                 await allocator.release_job(job_id)
                 released.append(job_id)
         except RuntimeError:
-            # Ray 404 or unreachable — zombie job
-            logger.warning("Zombie: job %s not in Ray, releasing GPU %s", job_id, slot.gpu_id)
-            await allocator.release_job(job_id)
+            # Ray 404 or unreachable — zombie job, kill orphan processes
+            logger.warning("Zombie: job %s not in Ray, releasing GPU %s + killing orphans", job_id, slot.gpu_id)
+            await allocator.release_job(job_id, kill_orphans=True)
             released.append(job_id)
 
     return released

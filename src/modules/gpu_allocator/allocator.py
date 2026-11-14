@@ -79,16 +79,32 @@ async def submit_or_queue(
     )
 
 
-async def release_job(job_id: str) -> str | None:
+async def release_job(job_id: str, kill_orphans: bool = False) -> str | None:
     """Release the GPU assigned to a finished/dead job.
 
     Args:
         job_id: Ray job ID.
+        kill_orphans: If True, kill orphan processes on the worker node.
 
     Returns:
         The gpu_id that was freed, or None.
     """
-    return await state.release_gpu_by_job(job_id)
+    # Get worker IP before releasing (needed for orphan kill)
+    worker_ip: str | None = None
+    if kill_orphans:
+        for slot in await state.get_assigned_slots():
+            if slot.assigned_job_id == job_id:
+                worker_ip = slot.node_ip
+                break
+
+    gpu_id = await state.release_gpu_by_job(job_id)
+
+    if gpu_id and kill_orphans and worker_ip:
+        from src.modules.jobs.service import _kill_orphan_processes
+
+        await _kill_orphan_processes(worker_ip, job_id)
+
+    return gpu_id
 
 
 async def drain_queue() -> int:

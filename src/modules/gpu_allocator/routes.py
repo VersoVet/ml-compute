@@ -32,10 +32,10 @@ async def manual_release(job_id: str) -> dict[str, str]:
     Raises:
         HTTPException: If job not found in GPU slots.
     """
-    gpu_id = await allocator.release_job(job_id)
+    gpu_id = await allocator.release_job(job_id, kill_orphans=True)
     if gpu_id is None:
         raise HTTPException(status_code=404, detail=f"Job '{job_id}' not assigned to any GPU")
-    return {"released": gpu_id, "job_id": job_id, "message": f"GPU {gpu_id} freed"}
+    return {"released": gpu_id, "job_id": job_id, "message": f"GPU {gpu_id} freed + orphans killed"}
 
 
 @router.delete("/queue/{queue_id}", tags=["gpu-allocator"])

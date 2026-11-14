@@ -1,5 +1,6 @@
 """Ray Jobs API service layer."""
 
+import asyncio
 import logging
 import os
 from typing import Any
@@ -138,11 +139,12 @@ async def list_jobs(status: str | None = None, limit: int = 100) -> dict[str, An
         return {"jobs": [], "total": 0}
 
 
-async def delete_job(job_id: str) -> dict[str, str]:
-    """Stop/delete a Ray job.
+async def delete_job(job_id: str, worker_ip: str | None = None) -> dict[str, str]:
+    """Stop a Ray job and kill orphan processes on the worker.
 
     Args:
         job_id: Ray job ID.
+        worker_ip: Worker node IP to clean up orphan processes.
 
     Returns:
         Status dict.
@@ -156,10 +158,39 @@ async def delete_job(job_id: str) -> dict[str, str]:
         client = JobSubmissionClient(address=RAY_DASHBOARD_URL)
 
         client.stop_job(job_id)
+        logger.info(f"Job {job_id} stopped via Ray")
 
-        logger.info(f"Job {job_id} stopped")
+        # Kill orphan processes on the worker node
+        if worker_ip:
+            await asyncio.sleep(2)
+            await _kill_orphan_processes(worker_ip, job_id)
 
         return {"job_id": job_id, "status": "STOPPED"}
     except Exception as e:
         logger.error(f"Failed to stop job {job_id}: {e}")
         raise RuntimeError(f"Failed to stop job: {e}")
+
+
+async def _kill_orphan_processes(worker_ip: str, job_id: str) -> None:
+    """Kill orphan training processes on a worker node via SSH.
+
+    Args:
+        worker_ip: Worker node IP address.
+        job_id: Ray job ID (for logging).
+    """
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            "ssh",
+            "-o",
+            "ConnectTimeout=5",
+            "-o",
+            "BatchMode=yes",
+            f"onyx@{worker_ip}",
+            "pkill -9 -f train_rotation; pkill -9 -f train_boneseg; pkill -9 -f train_multitask; pkill -9 -f train_yolo; pkill -9 -f train_efficientnet; echo done",
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        await asyncio.wait_for(proc.wait(), timeout=10.0)
+        logger.info("Orphan processes killed on %s (job %s)", worker_ip, job_id)
+    except Exception as e:
+        logger.warning("Failed to kill orphans on %s: %s", worker_ip, e)

@@ -150,7 +150,7 @@ async def get_job_status(job_id: str) -> JobResponse:
 
 @router.delete("/{job_id}", status_code=204, tags=["jobs"])
 async def delete_job(job_id: str) -> None:
-    """Stop and remove a job from Ray cluster.
+    """Stop a job and kill orphan processes on the worker.
 
     Args:
         job_id: Ray job ID to stop.
@@ -159,6 +159,19 @@ async def delete_job(job_id: str) -> None:
         HTTPException: If job not found or stop fails.
     """
     try:
-        await service.delete_job(job_id)
+        # Get worker IP from GPU allocator before stopping
+        from src.modules.gpu_allocator import state as gpu_state
+
+        worker_ip: str | None = None
+        slots = await gpu_state.get_assigned_slots()
+        for slot in slots:
+            if slot.assigned_job_id == job_id:
+                worker_ip = slot.node_ip
+                break
+
+        await service.delete_job(job_id, worker_ip=worker_ip)
+
+        # Release the GPU slot
+        await allocator.release_job(job_id)
     except RuntimeError as e:
         raise HTTPException(status_code=404, detail=str(e))
